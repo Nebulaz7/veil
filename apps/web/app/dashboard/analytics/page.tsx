@@ -6,7 +6,7 @@ import AnalyticsSection from "../components/AnalyticsSection";
 export default function AnalyticsPage() {
   return (
     <div>
-      <AnalyticsSection />
+      page
     </div>
   );
 }
