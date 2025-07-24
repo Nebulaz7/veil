@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 // Icons for the sidebar items
 import HomeIcon from "./svg/HomeIcon";
 import PollIcon from "./svg/PollIcon";
-import AnalyticsIcon from "./svg/AnalyticsIcon";
 import SettingsIcon from "./svg/SettingsIcon";
 import CollapseIcon from "./svg/CollapseIcon";
 import ExpandIcon from "./svg/ExpandIcon";
@@ -99,13 +98,7 @@ const DashboardSidenav = () => {
                 pathname.startsWith("/dashboard/polls/")
               }
             />
-            <NavItem
-              icon={<AnalyticsIcon />}
-              label="Analytics"
-              href="/dashboard/analytics"
-              isCollapsed={isCollapsed}
-              isActive={pathname === "/dashboard/analytics"}
-            />
+
             {/* Divider */}
             {/* <div className="my-4 border-t border-gray-200"></div>
 

@@ -2,7 +2,7 @@ import React from "react";
 import ActivityTable, { ActivityItem } from "./components/ActivityTable";
 import Link from "next/link";
 
-const Dashboard = () => {
+const DashboardPage = () => {
   const recentActivities: ActivityItem[] = [
     {
       id: "1",
@@ -77,4 +77,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+export default DashboardPage;
