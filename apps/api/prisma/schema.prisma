@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Moderator {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  username  String
+  password  String   // hashed
+  rooms     Room[]
+  replies   Reply[]
+  createdAt DateTime @default(now())
+}
+
+model Room {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  title       String
+  description String?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  endedAt     DateTime?
+
+  moderator   Moderator  @relation(fields: [moderatorId], references: [id])
+  moderatorId String
+
+  questions   Question[]
+  polls       Poll[]
+}
+
+model Question {
+  id         String   @id @default(cuid())
+  content    String
+  askedBy    String   // temp username (not relational)
+  isHidden   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  room       Room     @relation(fields: [roomId], references: [id])
+  roomId     String
+
+  reply      Reply?
+}
+
+model Reply {
+  id          String    @id @default(cuid())
+  content     String
+  createdAt   DateTime  @default(now())
+
+  question    Question  @relation(fields: [questionId], references: [id])
+  questionId  String    @unique
+
+  moderator   Moderator @relation(fields: [moderatorId], references: [id])
+  moderatorId String
+}
+
+model Poll {
+  id        String   @id @default(cuid())
+  name      String
+  status    String  
+  question  String
+  createdAt DateTime @default(now())
+  
+  room      Room     @relation(fields: [roomId], references: [id])
+  roomId    String
+
+  options   PollOption[]
+}
+
+model PollOption {
+  id       String     @id @default(cuid())
+  text     String
+
+  poll     Poll       @relation(fields: [pollId], references: [id])
+  pollId   String
+
+  votes    PollVote[]
+}
+
+model PollVote {
+  id        String       @id @default(cuid())
+
+  option    PollOption   @relation(fields: [optionId], references: [id])
+  optionId  String
+
+  voterId   String       // temp username or ID
+  createdAt DateTime     @default(now())
+
+  @@unique([optionId, voterId])
+}

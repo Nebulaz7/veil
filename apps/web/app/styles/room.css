@@ -1,0 +1,71 @@
+/* Dark mode styles */
+body.dark-mode {
+  background-color: #111827;
+  color: #f9fafb;
+}
+
+/* Smooth transitions for dark mode toggle */
+body,
+div,
+input,
+button,
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  transition:
+    background-color 0.3s,
+    color 0.3s,
+    border-color 0.3s;
+}
+
+/* Custom scrollbar for dark mode */
+body.dark-mode ::-webkit-scrollbar {
+  width: 8px;
+}
+
+body.dark-mode ::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 4px;
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Profile picture with username initials */
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background-color: #8b5cf6;
+  color: white;
+  border-radius: 50%;
+  font-weight: 600;
+}
+
+/* Make sure dropdown menus look good in dark mode */
+body.dark-mode .dropdown-menu {
+  background-color: #1f2937;
+  border-color: #374151;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .tab-label {
+    display: none;
+  }
+
+  .header-title {
+    font-size: 1rem;
+  }
+}
