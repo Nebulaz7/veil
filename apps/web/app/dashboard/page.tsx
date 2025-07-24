@@ -10,7 +10,7 @@ export default function Dashboard() {
     if (token) {
       setIsAuthenticated(true);
     } else {
-      window.location.href = "/login";
+      window.location.href = "/get-started";
     }
   }, []);
 
