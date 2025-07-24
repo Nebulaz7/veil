@@ -25,7 +25,7 @@ export class AuthController{
   createdAt: user.createdAt,
 });
 
-    res.redirect(`http://localhost:3000/client-handler?token=${token}`)
+    res.redirect(`https://veil-io.vercel.app/client-handler?token=${token}`)
 }
 
 @Get('twitter')
@@ -41,6 +41,6 @@ twitterAuthRedirect(@Req() req, @Res() res: Response) {
       expiresIn: '1h'
     });
 
-    res.redirect(`http://localhost:3000/client-handler?token=${token}`)
+    res.redirect(`https://veil-io.vercel.app/client-handler?token=${token}`)
 }
 }
