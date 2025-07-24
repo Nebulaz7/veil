@@ -764,7 +764,7 @@ const RoomClient = () => {
                         <p className="text-xs sm:text-sm text-gray-700 font-medium">
                           Answer:
                         </p>
-                        <p className="text-sm sm:text-base break-words">
+                        <p className="text-sm sm:text-base text-black break-words">
                           {q.answer}
                         </p>
                       </div>
