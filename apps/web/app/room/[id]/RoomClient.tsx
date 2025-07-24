@@ -76,6 +76,20 @@ const RoomClient = () => {
   const [rateLimitMessage, setRateLimitMessage] = useState("");
   const [userCount, setUserCount] = useState(0);
 
+  const HandleLeaveRoom = () => {
+    if (!roomId) return;
+
+    // Emit leave room event
+    socket.emit("leaveRoom", { roomId, userId });
+
+    // Clear local storage
+    localStorage.removeItem("temp_userId");
+    localStorage.removeItem("temp_username");
+
+    // Redirect to home page
+    window.location.href = "/";
+  };
+
   // Reply states
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(
     new Set()
@@ -518,7 +532,7 @@ const RoomClient = () => {
           <div className="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-sm">
             <div className="hidden sm:flex items-center space-x-1">
               <span className="text-sm sm:text-lg md:text-xl text-black">
-                Product Review Session
+                Q&A Room
               </span>
             </div>
             <div className="flex items-center space-x-1">
@@ -529,8 +543,11 @@ const RoomClient = () => {
               <span className="hidden sm:inline">Live</span>
             </div>
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            <div>
-              <button className="btn bg-red-600 text-white rounded-[25px] border-none px-2 py-1 sm:px-4 sm:py-[1px] hover:bg-red-700 text-xs sm:text-sm">
+            <div className="flex items-center space-x-6">
+              <button
+                onClick={HandleLeaveRoom}
+                className="btn bg-red-600 text-white rounded-[25px] border-none px-2 py-1 sm:px-4 sm:py-[1px] hover:bg-red-700 text-xs sm:text-sm"
+              >
                 <LogOut className="w-3 h-3 sm:w-4 sm:h-4 inline" />
                 <span className="hidden sm:inline ml-1">Leave room</span>
               </button>
@@ -806,7 +823,7 @@ const RoomClient = () => {
                             {q.replies.map((reply) => (
                               <div
                                 key={reply.id}
-                                className="bg-white border border-gray-200 p-3 rounded-lg ml-4"
+                                className="bg-white border text-black border-gray-200 p-3 rounded-lg ml-4"
                               >
                                 <div className="flex items-center space-x-2 mb-1">
                                   <span className="font-medium text-xs sm:text-sm text-gray-700">
