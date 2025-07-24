@@ -3,7 +3,7 @@ import { MessageCircleMore, ChartNoAxesColumn, LayoutGrid } from "lucide-react";
 
 const FeatureSection = () => {
   return (
-    <section className="relative py-0 md:py-24 px-4 bg-gradient-to-b from-transparent to-purple-900/90">
+    <section className="relative py-0 p-8 md:py-24 px-4 bg-gradient-to-b from-transparent to-purple-900/90">
       <div className="max-w-7xl mx-auto">
         {/* Section Header */}
         <div className="text-center mb-12 md:mb-16">
