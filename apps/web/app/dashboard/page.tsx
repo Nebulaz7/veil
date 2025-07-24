@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 export default function Dashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  
+
   useEffect(() => {
     const token = localStorage.getItem("auth_token");
     if (token) {

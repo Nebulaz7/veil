@@ -53,6 +53,7 @@ const RoomClient = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [rateLimitRemaining, setRateLimitRemaining] = useState(0);
   const [rateLimitMessage, setRateLimitMessage] = useState("");
+  const [userCount, setUserCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const rateLimitIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -123,12 +124,15 @@ const RoomClient = () => {
     });
 
     socket.emit("getQuestions", roomId);
-    
+
     const handleNewQuestion = (question: Question) => {
       setQuestions((prev) => [question, ...prev]);
     };
 
-    const handleRateLimitError = (data: { message: string; remainingTime: number }) => {
+    const handleRateLimitError = (data: {
+      message: string;
+      remainingTime: number;
+    }) => {
       setRateLimitMessage(data.message);
       setRateLimitRemaining(data.remainingTime);
     };
@@ -149,6 +153,44 @@ const RoomClient = () => {
       setPolls(data);
     };
     fetchPolls();
+
+    const fetchUserCount = async () => {
+      try {
+        const token = localStorage.getItem("auth_token");
+        if (!token) {
+          console.error("No auth token found");
+          return;
+        }
+
+        const countRes = await fetch(
+          `https://veil-1qpe.onrender.com/user/room/${roomId}/no`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!countRes.ok) {
+          throw new Error(`Failed to fetch user count for room ${roomId}`);
+        }
+
+        const countData = await countRes.json();
+
+        if (typeof countData === "number") {
+          setUserCount(countData);
+        } else {
+          console.warn("Unexpected count response:", countData);
+          setUserCount(0);
+        }
+      } catch (err) {
+        console.error("Error fetching user count:", err);
+        setUserCount(0);
+      }
+    };
+
+    fetchPolls();
+    fetchUserCount();
 
     return () => {
       socket.off("newQuestion", handleNewQuestion);
@@ -274,7 +316,12 @@ const RoomClient = () => {
   };
 
   const handleSubmitQuestion = () => {
-    if (!newQuestion.trim() || !roomId || isRoomLoading || rateLimitRemaining > 0) {
+    if (
+      !newQuestion.trim() ||
+      !roomId ||
+      isRoomLoading ||
+      rateLimitRemaining > 0
+    ) {
       if (rateLimitRemaining > 0) {
         console.warn("Rate limited - please wait");
       } else {
@@ -296,29 +343,29 @@ const RoomClient = () => {
   };
 
   useEffect(() => {
-  if (!roomId) return;
+    if (!roomId) return;
 
-  const handleQuestionUpdated = (updatedQuestion: Question) => {
-    setQuestions((prev) =>
-      prev.map((q) =>
-        q.id === updatedQuestion.id
-          ? { ...q, upvotes: updatedQuestion.upvotes || 0 }
-          : q
-      )
-    );
+    const handleQuestionUpdated = (updatedQuestion: Question) => {
+      setQuestions((prev) =>
+        prev.map((q) =>
+          q.id === updatedQuestion.id
+            ? { ...q, upvotes: updatedQuestion.upvotes || 0 }
+            : q
+        )
+      );
+    };
+
+    socket.on("questionUpdated", handleQuestionUpdated);
+
+    return () => {
+      socket.off("questionUpdated", handleQuestionUpdated);
+    };
+  }, [roomId]);
+
+  const handleLike = (questionId: string) => {
+    if (!socket) return;
+    socket.emit("upvoteQuestion", { roomId, questionId });
   };
-
-  socket.on("questionUpdated", handleQuestionUpdated);
-
-  return () => {
-    socket.off("questionUpdated", handleQuestionUpdated);
-  };
-}, [roomId]);
-
-const handleLike = (questionId: string) => {
-  if (!socket) return;
-  socket.emit('upvoteQuestion', { roomId, questionId });
-};
 
   const handleVote = async (pollId: string, optionIndex: number) => {
     const token = localStorage.getItem("auth_token");
@@ -363,6 +410,9 @@ const handleLike = (questionId: string) => {
             </div>
             <div className="flex items-center space-x-1">
               <Users className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="text-xs sm:text-sm font-medium">
+                {userCount}
+              </span>
               <span className="hidden sm:inline">Live</span>
             </div>
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
@@ -423,11 +473,13 @@ const handleLike = (questionId: string) => {
 
                 <div className="relative">
                   {/* Main input container */}
-                  <div className={`flex items-center bg-gray-50 border rounded-xl sm:rounded-2xl focus-within:bg-white transition-all duration-200 ${
-                    rateLimitRemaining > 0 
-                      ? 'border-amber-300 focus-within:border-amber-400' 
-                      : 'border-gray-300 focus-within:border-purple-500'
-                  }`}>
+                  <div
+                    className={`flex items-center bg-gray-50 border rounded-xl sm:rounded-2xl focus-within:bg-white transition-all duration-200 ${
+                      rateLimitRemaining > 0
+                        ? "border-amber-300 focus-within:border-amber-400"
+                        : "border-gray-300 focus-within:border-purple-500"
+                    }`}
+                  >
                     <textarea
                       value={newQuestion}
                       onChange={(e) => setNewQuestion(e.target.value)}
@@ -438,7 +490,7 @@ const handleLike = (questionId: string) => {
                         }
                       }}
                       placeholder={
-                        rateLimitRemaining > 0 
+                        rateLimitRemaining > 0
                           ? `Please wait ${rateLimitRemaining}s before sending another question...`
                           : "Ask your question..."
                       }
@@ -462,7 +514,10 @@ const handleLike = (questionId: string) => {
                       <button
                         onClick={handleImproveAi}
                         disabled={
-                          isRoomLoading || isLoading || !newQuestion.trim() || rateLimitRemaining > 0
+                          isRoomLoading ||
+                          isLoading ||
+                          !newQuestion.trim() ||
+                          rateLimitRemaining > 0
                         }
                         className="flex cursor-pointer items-center space-x-1 px-2 py-1 sm:px-3 sm:py-1.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-xs font-medium rounded-full hover:from-blue-600 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
                       >
@@ -508,15 +563,21 @@ const handleLike = (questionId: string) => {
                       {/* Send button */}
                       <button
                         onClick={handleSubmitQuestion}
-                        disabled={isRoomLoading || !newQuestion.trim() || rateLimitRemaining > 0}
+                        disabled={
+                          isRoomLoading ||
+                          !newQuestion.trim() ||
+                          rateLimitRemaining > 0
+                        }
                         className={`flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 text-white rounded-full transition-all duration-200 shadow-sm ${
                           rateLimitRemaining > 0
-                            ? 'bg-amber-400 cursor-not-allowed'
-                            : 'bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 disabled:cursor-not-allowed'
+                            ? "bg-amber-400 cursor-not-allowed"
+                            : "bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 disabled:cursor-not-allowed"
                         }`}
                       >
                         {rateLimitRemaining > 0 ? (
-                          <span className="text-xs font-medium tabular-nums">{rateLimitRemaining}</span>
+                          <span className="text-xs font-medium tabular-nums">
+                            {rateLimitRemaining}
+                          </span>
                         ) : (
                           <SendHorizonal className="w-3 h-3 sm:w-4 sm:h-4" />
                         )}

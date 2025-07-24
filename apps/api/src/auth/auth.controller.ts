@@ -1,46 +1,46 @@
-import { Controller, Req, UseGuards, Get, Res } from '@nestjs/common'
-import { ModeratorAuthService } from './moderator-auth.service'
-import { Response } from 'express'
-import { AuthGuard } from '@nestjs/passport'
-import * as jwt from 'jsonwebtoken'
-import { JwtModule } from '@nestjs/jwt'
+import { Controller, Req, UseGuards, Get, Res } from '@nestjs/common';
+import { ModeratorAuthService } from './moderator-auth.service';
+import { Response } from 'express';
+import { AuthGuard } from '@nestjs/passport';
+import * as jwt from 'jsonwebtoken';
+import { JwtModule } from '@nestjs/jwt';
 
 @Controller('auth')
-export class AuthController{
-  constructor(private moderatorAuthService: ModeratorAuthService){}
-@Get('google')
-@UseGuards(AuthGuard('google'))
-  async googleAuth(){}
+export class AuthController {
+  constructor(private moderatorAuthService: ModeratorAuthService) {}
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  async googleAuth() {}
 
-@Get('google/redirect')
-@UseGuards(AuthGuard('google'))
+  @Get('google/redirect')
+  @UseGuards(AuthGuard('google'))
   async googleAuthRedirect(@Req() req, @Res() res: Response) {
     const user = req.user;
 
     const token = await this.moderatorAuthService.signJwt({
-  id: user.id,
-  email: user.email,
-  name: user.name,
-  picture: user.picture,
-  createdAt: user.createdAt,
-});
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      picture: user.picture,
+      createdAt: user.createdAt,
+    });
 
-    res.redirect(`https://veil-io.vercel.app/client-handler?token=${token}`)
-}
+    res.redirect(`https://veil-io.vercel.app/client-handler?token=${token}`);
+  }
 
-@Get('twitter')
-@UseGuards(AuthGuard('twitter'))
-async twitterAuth(){}
+  @Get('twitter')
+  @UseGuards(AuthGuard('twitter'))
+  async twitterAuth() {}
 
-@Get('twitter/redirect')
-@UseGuards(AuthGuard('twitter'))
-twitterAuthRedirect(@Req() req, @Res() res: Response) {
+  @Get('twitter/redirect')
+  @UseGuards(AuthGuard('twitter'))
+  twitterAuthRedirect(@Req() req, @Res() res: Response) {
     const user = req.user;
 
     const token = jwt.sign(user, process.env.JWT_SECRET, {
-      expiresIn: '1h'
+      expiresIn: '1h',
     });
 
-    res.redirect(`https://veil-io.vercel.app/client-handler?token=${token}`)
-}
+    res.redirect(`https://veil-io.vercel.app/client-handler?token=${token}`);
+  }
 }
