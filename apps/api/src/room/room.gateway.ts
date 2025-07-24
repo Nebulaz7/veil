@@ -94,17 +94,11 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(data.roomId).emit('newQuestion', newQuestion);
   }
 
-  @SubscribeMessage('replyToQuestion')
+ @SubscribeMessage('replyToQuestion')
 handleReplyToQuestion(
   @MessageBody() data: { roomId: string; questionId: string; content: string },
   @ConnectedSocket() client: Socket,
 ) {
-  if (client.data.role !== 'moderator') {
-    console.warn('🚫 Non-moderator attempted to reply.');
-    client.emit('error', { message: 'Unauthorized action' });
-    return;
-  }
-
   const updated = this.questionStore.answerQuestion(
     data.roomId,
     data.questionId,

@@ -12,6 +12,9 @@ import {
   Clock,
   LogOut,
   AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Reply,
 } from "lucide-react";
 
 interface Question {
@@ -22,6 +25,15 @@ interface Question {
   upvotes: number;
   answered: boolean;
   answer?: string;
+  upvotedBy?: string[];
+  replies?: Reply[];
+}
+
+interface Reply {
+  id: string;
+  user: string;
+  content: string;
+  timestamp: string;
 }
 
 interface PollOption {
@@ -45,6 +57,15 @@ interface Props {
 const RoomClient = () => {
   const params = useParams();
   const roomId = params?.id as string;
+  const userId =
+    typeof window !== "undefined"
+      ? (localStorage.getItem("temp_userId") ?? "anonymous")
+      : "anonymous";
+  const username =
+    typeof window !== "undefined"
+      ? (localStorage.getItem("temp_username") ?? "Anonymous")
+      : "Anonymous";
+
   const [isRoomLoading, setIsRoomLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("qa");
   const [newQuestion, setNewQuestion] = useState("");
@@ -54,6 +75,16 @@ const RoomClient = () => {
   const [rateLimitRemaining, setRateLimitRemaining] = useState(0);
   const [rateLimitMessage, setRateLimitMessage] = useState("");
   const [userCount, setUserCount] = useState(0);
+
+  // Reply states
+  const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(
+    new Set()
+  );
+  const [replyInputs, setReplyInputs] = useState<Record<string, string>>({});
+  const [isSubmittingReply, setIsSubmittingReply] = useState<
+    Record<string, boolean>
+  >({});
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const rateLimitIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -129,6 +160,16 @@ const RoomClient = () => {
       setQuestions((prev) => [question, ...prev]);
     };
 
+    const handleQuestionsList = (questionsList: Question[]) => {
+      setQuestions(questionsList);
+    };
+
+    const handleQuestionReplied = (updatedQuestion: Question) => {
+      setQuestions((prev) =>
+        prev.map((q) => (q.id === updatedQuestion.id ? updatedQuestion : q))
+      );
+    };
+
     const handleRateLimitError = (data: {
       message: string;
       remainingTime: number;
@@ -138,6 +179,8 @@ const RoomClient = () => {
     };
 
     socket.on("newQuestion", handleNewQuestion);
+    socket.on("questionsList", handleQuestionsList);
+    socket.on("questionReplied", handleQuestionReplied);
     socket.on("rateLimitError", handleRateLimitError);
 
     const fetchPolls = async () => {
@@ -194,9 +237,64 @@ const RoomClient = () => {
 
     return () => {
       socket.off("newQuestion", handleNewQuestion);
+      socket.off("questionsList", handleQuestionsList);
+      socket.off("questionReplied", handleQuestionReplied);
       socket.off("rateLimitError", handleRateLimitError);
     };
   }, [roomId]);
+
+  // Toggle expanded state for a question
+  const toggleQuestionExpanded = (questionId: string) => {
+    setExpandedQuestions((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(questionId)) {
+        newSet.delete(questionId);
+      } else {
+        newSet.add(questionId);
+      }
+      return newSet;
+    });
+  };
+
+  // Handle reply input change
+  const handleReplyInputChange = (questionId: string, value: string) => {
+    setReplyInputs((prev) => ({
+      ...prev,
+      [questionId]: value,
+    }));
+  };
+
+  // Submit reply
+  const handleSubmitReply = async (questionId: string) => {
+    const replyContent = replyInputs[questionId]?.trim();
+    if (
+      !replyContent ||
+      isSubmittingReply[questionId] ||
+      rateLimitRemaining > 0
+    ) {
+      return;
+    }
+
+    setIsSubmittingReply((prev) => ({ ...prev, [questionId]: true }));
+
+    try {
+      socket.emit("replyToQuestion", {
+        roomId,
+        questionId,
+        content: replyContent,
+      });
+
+      // Clear the input
+      setReplyInputs((prev) => ({
+        ...prev,
+        [questionId]: "",
+      }));
+    } catch (error) {
+      console.error("Error submitting reply:", error);
+    } finally {
+      setIsSubmittingReply((prev) => ({ ...prev, [questionId]: false }));
+    }
+  };
 
   const handleImproveAi = async () => {
     // Check if there's text to improve
@@ -349,16 +447,31 @@ const RoomClient = () => {
       setQuestions((prev) =>
         prev.map((q) =>
           q.id === updatedQuestion.id
-            ? { ...q, upvotes: updatedQuestion.upvotes || 0 }
+            ? {
+                ...q,
+                upvotes: updatedQuestion.upvotes || 0,
+                upvotedBy: updatedQuestion.upvotedBy || [],
+              }
             : q
         )
       );
     };
 
+    const handleUpvoteResponse = (response: {
+      success: boolean;
+      message: string;
+    }) => {
+      if (!response.success) {
+        console.log(response.message);
+      }
+    };
+
     socket.on("questionUpdated", handleQuestionUpdated);
+    socket.on("upvoteResponse", handleUpvoteResponse);
 
     return () => {
       socket.off("questionUpdated", handleQuestionUpdated);
+      socket.off("upvoteResponse", handleUpvoteResponse);
     };
   }, [roomId]);
 
@@ -639,13 +752,142 @@ const RoomClient = () => {
                         </p>
                       </div>
                     )}
-                    <button
-                      onClick={() => handleLike(q.id)}
-                      className="text-xs sm:text-sm text-gray-600 hover:text-purple-600 flex items-center space-x-2"
-                    >
-                      <ThumbsUp className="w-3 h-3 sm:w-4 sm:h-4" />
-                      <span>{q.upvotes}</span>
-                    </button>
+
+                    {/* Action buttons row */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <button
+                          onClick={() => handleLike(q.id)}
+                          className={`text-xs sm:text-sm flex items-center space-x-2 transition-colors ${
+                            q.upvotedBy?.includes(userId)
+                              ? "text-purple-600"
+                              : "text-gray-600 hover:text-purple-600"
+                          }`}
+                          disabled={q.upvotedBy?.includes(userId)}
+                        >
+                          <ThumbsUp
+                            className={`w-3 h-3 sm:w-4 sm:h-4 ${
+                              q.upvotedBy?.includes(userId)
+                                ? "fill-current"
+                                : ""
+                            }`}
+                          />
+                          <span>{q.upvotes || 0}</span>
+                        </button>
+
+                        <button
+                          onClick={() => toggleQuestionExpanded(q.id)}
+                          className="text-xs sm:text-sm flex items-center space-x-1 text-gray-600 hover:text-purple-600 transition-colors"
+                        >
+                          <Reply className="w-3 h-3 sm:w-4 sm:h-4" />
+                          <span>Reply</span>
+                          {expandedQuestions.has(q.id) ? (
+                            <ChevronUp className="w-3 h-3 sm:w-4 sm:h-4" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4" />
+                          )}
+                        </button>
+                      </div>
+
+                      {q.replies && q.replies.length > 0 && (
+                        <span className="text-xs text-gray-500">
+                          {q.replies.length}{" "}
+                          {q.replies.length === 1 ? "reply" : "replies"}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Expanded replies section */}
+                    {expandedQuestions.has(q.id) && (
+                      <div className="mt-4 space-y-3">
+                        {/* Existing replies */}
+                        {q.replies && q.replies.length > 0 && (
+                          <div className="space-y-2">
+                            {q.replies.map((reply) => (
+                              <div
+                                key={reply.id}
+                                className="bg-white border border-gray-200 p-3 rounded-lg ml-4"
+                              >
+                                <div className="flex items-center space-x-2 mb-1">
+                                  <span className="font-medium text-xs sm:text-sm text-gray-700">
+                                    {reply.user}
+                                  </span>
+                                  <div className="text-xs text-gray-500 flex items-center space-x-1">
+                                    <Clock className="w-2 h-2 flex-shrink-0" />
+                                    <span>{reply.timestamp}</span>
+                                  </div>
+                                </div>
+                                <p className="text-xs sm:text-sm text-gray-800 break-words">
+                                  {reply.content}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Reply input */}
+                        <div className="ml-4">
+                          <div className="flex items-center space-x-2 bg-white border border-gray-300 rounded-lg focus-within:border-purple-500 transition-colors">
+                            <input
+                              type="text"
+                              value={replyInputs[q.id] || ""}
+                              onChange={(e) =>
+                                handleReplyInputChange(q.id, e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                  e.preventDefault();
+                                  handleSubmitReply(q.id);
+                                }
+                              }}
+                              placeholder={
+                                rateLimitRemaining > 0
+                                  ? `Please wait ${rateLimitRemaining}s...`
+                                  : "Write a reply..."
+                              }
+                              disabled={
+                                isSubmittingReply[q.id] ||
+                                rateLimitRemaining > 0
+                              }
+                              className="flex-1 p-2 sm:p-3 bg-transparent border-none rounded-lg focus:outline-none placeholder-gray-500 text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
+                            />
+                            <button
+                              onClick={() => handleSubmitReply(q.id)}
+                              disabled={
+                                !replyInputs[q.id]?.trim() ||
+                                isSubmittingReply[q.id] ||
+                                rateLimitRemaining > 0
+                              }
+                              className="flex items-center justify-center w-8 h-8 text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 disabled:cursor-not-allowed rounded-full transition-colors mr-2"
+                            >
+                              {isSubmittingReply[q.id] ? (
+                                <svg
+                                  className="w-3 h-3 animate-spin"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <circle
+                                    className="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                  ></circle>
+                                  <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                  ></path>
+                                </svg>
+                              ) : (
+                                <SendHorizonal className="w-3 h-3" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))
               )}
@@ -725,5 +967,4 @@ const RoomClient = () => {
     </div>
   );
 };
-
 export default RoomClient;
