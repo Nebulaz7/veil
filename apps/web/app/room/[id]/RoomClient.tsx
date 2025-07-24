@@ -834,7 +834,7 @@ const RoomClient = () => {
                                     <span>{reply.timestamp}</span>
                                   </div>
                                 </div>
-                                <p className="text-xs sm:text-sm text-gray-800 break-words">
+                                <p className="text-xs sm:text-sm text-black break-words">
                                   {reply.content}
                                 </p>
                               </div>
