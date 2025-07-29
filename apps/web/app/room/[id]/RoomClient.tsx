@@ -39,6 +39,7 @@ const RoomClient = () => {
   const [rateLimitRemaining, setRateLimitRemaining] = useState(0);
   const [rateLimitMessage, setRateLimitMessage] = useState("");
   const [userCount, setUserCount] = useState(0);
+  const [activePollsCount, setActivePollsCount] = useState(0);
 
   const HandleLeaveRoom = () => {
     if (!roomId) return;
@@ -126,14 +127,19 @@ const RoomClient = () => {
 
     const userId = localStorage.getItem("temp_userId") ?? "guest";
     const isModerator = localStorage.getItem("is_moderator") === "true";
+    
+    // Join room
     socket.emit("joinRoom", {
       roomId: roomId,
       userId: userId,
       role: isModerator ? "moderator" : "user",
     });
 
-    socket.emit("getQuestions", roomId);
+    // Request initial data
+    socket.emit("getQuestions", { roomId });
+    socket.emit("getActivePolls", { roomId });
 
+    // Question event handlers
     const handleNewQuestion = (question: Question) => {
       setQuestions((prev) => [question, ...prev]);
     };
@@ -148,6 +154,110 @@ const RoomClient = () => {
       );
     };
 
+    const handleQuestionUpdated = (updatedQuestion: Question) => {
+      setQuestions((prev) =>
+        prev.map((q) =>
+          q.id === updatedQuestion.id
+            ? {
+                ...q,
+                upvotes: updatedQuestion.upvotes || 0,
+                upvotedBy: updatedQuestion.upvotedBy || [],
+              }
+            : q
+        )
+      );
+    };
+
+    const handleUpvoteResponse = (response: {
+      success: boolean;
+      message: string;
+    }) => {
+      if (!response.success) {
+        console.log(response.message);
+      }
+    };
+
+    // Poll event handlers
+    const handleNewPoll = (poll: any) => {
+      console.log('📊 New poll received:', poll);
+      
+      // Convert server poll format to client format
+      const formattedPoll: Poll = {
+        id: poll.id,
+        question: poll.question,
+        options: poll.options.map((opt: any) => ({
+          text: opt.text,
+          votes: opt.votes?.length || 0,
+          percentage: 0
+        })),
+        totalVotes: poll.options.reduce((total: number, opt: any) => total + (opt.votes?.length || 0), 0),
+        timeLeft: poll.expiresAt ? calculateTimeLeft(poll.expiresAt) : "Expired"
+      };
+
+      // Calculate percentages
+      formattedPoll.options.forEach(option => {
+        option.percentage = formattedPoll.totalVotes > 0 
+          ? Math.round((option.votes / formattedPoll.totalVotes) * 100) 
+          : 0;
+      });
+
+      setPolls((prev) => {
+        // Remove any existing poll with same question and add new one
+        const filtered = prev.filter(p => p.question !== formattedPoll.question);
+        return [formattedPoll, ...filtered];
+      });
+
+      updateActivePollsCount();
+    };
+
+    const handleActivePollsList = (pollsData: any[]) => {
+      console.log('📊 Active polls received:', pollsData);
+      
+      const formattedPolls: Poll[] = pollsData.map((poll: any) => {
+        const totalVotes = poll.options.reduce((total: number, opt: any) => total + (opt.votes?.length || 0), 0);
+        
+        return {
+          id: poll.id,
+          question: poll.question,
+          options: poll.options.map((opt: any) => ({
+            text: opt.text,
+            votes: opt.votes?.length || 0,
+            percentage: totalVotes > 0 ? Math.round(((opt.votes?.length || 0) / totalVotes) * 100) : 0
+          })),
+          totalVotes,
+          timeLeft: poll.expiresAt ? calculateTimeLeft(poll.expiresAt) : "Expired"
+        };
+      });
+
+      setPolls(formattedPolls);
+      setActivePollsCount(formattedPolls.length);
+    };
+
+    const handlePollVoteAdded = (voteData: any) => {
+      console.log('🗳️ Vote added:', voteData);
+      // Request fresh polls to get updated vote counts
+      socket.emit("getActivePolls", { roomId });
+    };
+
+    const handleVoteConfirmed = (data: any) => {
+      console.log('✅ Vote confirmed:', data);
+      // Request fresh polls to get updated results
+      socket.emit("getActivePolls", { roomId });
+    };
+
+    const handlePollClosed = (data: any) => {
+      console.log('📊 Poll closed:', data);
+      // Remove closed poll from active polls
+      setPolls(prev => prev.filter(poll => poll.id !== data.pollId));
+      updateActivePollsCount();
+    };
+
+    const handlePollError = (data: any) => {
+      console.error('❌ Poll error:', data.message);
+      // Show user-friendly error message
+      alert(`Poll Error: ${data.message}`);
+    };
+
     const handleRateLimitError = (data: {
       message: string;
       remainingTime: number;
@@ -156,33 +266,23 @@ const RoomClient = () => {
       setRateLimitRemaining(data.remainingTime);
     };
 
+    // Register all event listeners
     socket.on("newQuestion", handleNewQuestion);
     socket.on("questionsList", handleQuestionsList);
     socket.on("questionReplied", handleQuestionReplied);
+    socket.on("questionUpdated", handleQuestionUpdated);
+    socket.on("upvoteResponse", handleUpvoteResponse);
     socket.on("rateLimitError", handleRateLimitError);
 
-    // Add socket handler for polls
-    const handlePollsList = (pollsList: Poll[]) => {
-      setPolls(pollsList);
-    };
-
-    const handleNewPoll = (poll: Poll) => {
-      setPolls((prev) => [...prev, poll]);
-    };
-
-    const handlePollUpdated = (updatedPoll: Poll) => {
-      setPolls((prev) =>
-        prev.map((p) => (p.id === updatedPoll.id ? updatedPoll : p))
-      );
-    };
-
-    socket.on("pollsList", handlePollsList);
+    // Poll event listeners
     socket.on("newPoll", handleNewPoll);
-    socket.on("pollUpdated", handlePollUpdated);
+    socket.on("activePollsList", handleActivePollsList);
+    socket.on("pollVoteAdded", handlePollVoteAdded);
+    socket.on("voteConfirmed", handleVoteConfirmed);
+    socket.on("pollClosed", handlePollClosed);
+    socket.on("pollError", handlePollError);
 
-    // Request polls via socket instead of HTTP
-    socket.emit("getActivePolls", { roomId });
-
+    // Fetch user count (keep HTTP for this as it's not real-time critical)
     const fetchUserCount = async () => {
       try {
         const token = localStorage.getItem("auth_token");
@@ -220,16 +320,48 @@ const RoomClient = () => {
 
     fetchUserCount();
 
+    // Cleanup function
     return () => {
       socket.off("newQuestion", handleNewQuestion);
       socket.off("questionsList", handleQuestionsList);
       socket.off("questionReplied", handleQuestionReplied);
+      socket.off("questionUpdated", handleQuestionUpdated);
+      socket.off("upvoteResponse", handleUpvoteResponse);
       socket.off("rateLimitError", handleRateLimitError);
-      socket.off("pollsList", handlePollsList);
+
+      // Remove poll event listeners
       socket.off("newPoll", handleNewPoll);
-      socket.off("pollUpdated", handlePollUpdated);
+      socket.off("activePollsList", handleActivePollsList);
+      socket.off("pollVoteAdded", handlePollVoteAdded);
+      socket.off("voteConfirmed", handleVoteConfirmed);
+      socket.off("pollClosed", handlePollClosed);
+      socket.off("pollError", handlePollError);
     };
   }, [roomId]);
+
+  // Helper function to calculate time left
+  const calculateTimeLeft = (expiresAt: string): string => {
+    const now = new Date().getTime();
+    const expiry = new Date(expiresAt).getTime();
+    const difference = expiry - now;
+
+    if (difference <= 0) return "Expired";
+
+    const minutes = Math.floor(difference / (1000 * 60));
+    const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+    
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Function to update active polls count
+  const updateActivePollsCount = () => {
+    socket.emit("getActivePolls", { roomId });
+  };
+
+  // Update polls count when polls change
+  useEffect(() => {
+    setActivePollsCount(polls.length);
+  }, [polls]);
 
   // Toggle expanded state for a question
   const toggleQuestionExpanded = (questionId: string) => {
@@ -428,98 +560,56 @@ const RoomClient = () => {
     setNewQuestion("");
   };
 
-  useEffect(() => {
-    if (!roomId) return;
-
-    const handleQuestionUpdated = (updatedQuestion: Question) => {
-      setQuestions((prev) =>
-        prev.map((q) =>
-          q.id === updatedQuestion.id
-            ? {
-                ...q,
-                upvotes: updatedQuestion.upvotes || 0,
-                upvotedBy: updatedQuestion.upvotedBy || [],
-              }
-            : q
-        )
-      );
-    };
-
-    const handleUpvoteResponse = (response: {
-      success: boolean;
-      message: string;
-    }) => {
-      if (!response.success) {
-        console.log(response.message);
-      }
-    };
-
-    socket.on("questionUpdated", handleQuestionUpdated);
-    socket.on("upvoteResponse", handleUpvoteResponse);
-
-    return () => {
-      socket.off("questionUpdated", handleQuestionUpdated);
-      socket.off("upvoteResponse", handleUpvoteResponse);
-    };
-  }, [roomId]);
-
   const handleLike = (questionId: string) => {
     if (!socket) return;
-    socket.emit("upvoteQuestion", { roomId, questionId });
+    socket.emit("upvoteQuestion", { roomId, questionId, userId });
   };
 
-  const handleVote = async (pollId: string, optionIndex: number) => {
-    const token = localStorage.getItem("auth_token");
-
-    // Use the socket to emit vote event
-    socket.emit("votePoll", {
-      roomId,
-      pollId,
-      userId,
-      optionIndex,
-    });
-
-    // No need to re-fetch polls as we'll get updates via socket events
+  // NEW: WebSocket-based vote handler
+  const handleVote = (pollId: string, optionIndex: number) => {
+    console.log('🗳️ WebSocket vote:', { pollId, optionIndex });
+    // This will be handled by the PollsList component via WebSocket
+    // The actual voting logic is in the PollsList component
   };
 
-  async function handleCreatePoll(poll: {
-    question: string;
-    options: { text: string }[];
-  }): Promise<void> {
-    const token = localStorage.getItem("auth_token");
-    if (!token) {
-      alert("You must be logged in to create a poll.");
+  // NEW: WebSocket-based poll creation
+  const handleCreatePoll = (poll: { question: string; options: { text: string }[] }) => {
+    console.log('📊 Creating poll via WebSocket:', poll);
+    
+    if (!socket || !socket.connected) {
+      alert("Not connected to server. Please try again.");
       return;
     }
 
-    try {
-      if (!socket) {
-        throw new Error("Socket connection not available");
-      }
+    // Extract option texts from the options objects
+    const optionTexts = poll.options.map(opt => opt.text);
 
-      // Use socket to create poll instead of HTTP
-      socket.emit("createPoll", {
-        roomId,
-        userId,
-        question: poll.question,
-        options: poll.options.map((opt) => opt.text),
-      });
-
-      // No need to refresh polls as we'll get updates via socket events
-    } catch (error) {
-      console.error("Error creating poll:", error);
-      alert("Failed to create poll. Please try again.");
-    }
-  }
+    // Emit via WebSocket
+    socket.emit("createPoll", {
+      roomId,
+      userId,
+      name: poll.question, // Using question as name
+      question: poll.question,
+      options: optionTexts
+    });
+  };
 
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <RoomHeader userCount={userCount} onLeaveRoom={HandleLeaveRoom} />
+      <RoomHeader 
+        userCount={userCount} 
+        onLeaveRoom={HandleLeaveRoom}
+        activePollsCount={activePollsCount}
+      />
 
       <div className="max-w-4xl mx-auto p-2 sm:p-4">
         {/* Tabs */}
-        <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+        <TabNavigation 
+          activeTab={activeTab} 
+          onTabChange={setActiveTab}
+          activePollsCount={activePollsCount}
+        />
 
         {/* QA Tab */}
         {activeTab === "qa" && (
@@ -568,4 +658,5 @@ const RoomClient = () => {
     </div>
   );
 };
+
 export default RoomClient;
