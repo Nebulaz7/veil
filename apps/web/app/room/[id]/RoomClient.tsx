@@ -745,10 +745,10 @@ const RoomClient = () => {
                         <span className="font-medium text-sm sm:text-base truncate">
                           {q.user}
                         </span>
-                        {/* <div className="text-xs sm:text-sm text-gray-500 flex items-center space-x-1">
+                        <div className="text-xs sm:text-sm text-gray-500 flex items-center space-x-1">
                           <Clock className="w-2 h-2 sm:w-3 sm:h-3 flex-shrink-0" />
                           <span className="truncate">{q.timestamp}</span>
-                        </div> */}
+                        </div>
                       </div>
                       {q.answered && (
                         <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full flex-shrink-0 ml-2">
