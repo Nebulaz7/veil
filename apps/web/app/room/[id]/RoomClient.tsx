@@ -485,6 +485,43 @@ const RoomClient = () => {
     }
   };
 
+  async function handleCreatePoll(poll: { question: string; options: { text: string }[] }): Promise<void> {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      alert("You must be logged in to create a poll.");
+      return;
+    }
+    try {
+      const res = await fetch(`https://veil-1qpe.onrender.com/rooms/${roomId}/polls`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question: poll.question,
+          options: poll.options.map((opt) => opt.text),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to create poll");
+      }
+      // Refresh polls after creation
+      const updated = await fetch(
+        `https://veil-1qpe.onrender.com/rooms/${roomId}/polls`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const updatedPolls = await updated.json();
+      setPolls(updatedPolls);
+    } catch (error) {
+      console.error("Error creating poll:", error);
+      alert("Failed to create poll. Please try again.");
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
@@ -529,10 +566,10 @@ const RoomClient = () => {
         {/* Polls Tab */}
         {activeTab === "polls" && (
              <PollsList
-               polls={serverPolls}
+               polls={polls}
                onVote={handleVote}
                onCreatePoll={handleCreatePoll}
-               socket={socketInstance}
+               socket={socket}
                roomId={roomId}
                userId={userId}
             />

@@ -183,22 +183,20 @@ const PollsList: React.FC<PollsListProps> = ({
   };
 
   // WebSocket function to vote on a poll
-  const voteOnPollViaSocket = (pollId: string, optionId: string) => {
+  const voteOnPollViaSocket = (pollId: string) => {
     if (!socket || !isConnected) {
       console.error('❌ Socket not connected');
       alert('Not connected to server. Please try again.');
       return;
     }
 
-    console.log('🗳️ Voting via socket:', { pollId, optionId });
+    console.log('🗳️ Voting via socket:', { pollId});
     socket.emit('votePoll', {
       roomId,
       pollId,
-      optionId,
       userId
     });
   };
-
   // Close modal when clicking outside
   const handleClickOutside = (e: React.MouseEvent) => {
     if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
@@ -359,10 +357,7 @@ const PollsList: React.FC<PollsListProps> = ({
       // Handle server poll voting via WebSocket
       const poll = polls.find(p => p.id === pollId);
       if (poll && poll.options[optionIndex]) {
-        // For server polls, we need to send the actual option ID
-        // Assuming the option has an ID field, or we use the index
-        const optionId = poll.options[optionIndex].id || `option-${optionIndex}`;
-        voteOnPollViaSocket(pollId, optionId);
+        voteOnPollViaSocket(pollId);
       }
 
       // Also call the original onVote handler if provided

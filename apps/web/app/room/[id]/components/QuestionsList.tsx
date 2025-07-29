@@ -14,7 +14,7 @@ interface QuestionsListProps {
   onReplyInputChange: (questionId: string, value: string) => void;
   onSubmitReply: (questionId: string) => void;
   onLike: (questionId: string) => void;
-  messagesEndRef: React.RefObject<HTMLDivElement>;
+  messagesEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const QuestionsList: React.FC<QuestionsListProps> = ({
