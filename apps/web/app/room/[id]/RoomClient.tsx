@@ -468,8 +468,8 @@ const RoomClient = () => {
     socket.emit("upvoteQuestion", { roomId, questionId });
   };
 
-  const handleVote = (pollId: string, optionIndex: number) => {
-    if (!socket) return;
+  const handleVote = async (pollId: string, optionIndex: number) => {
+    const token = localStorage.getItem("auth_token");
 
     // Use the socket to emit vote event
     socket.emit("votePoll", {
