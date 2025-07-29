@@ -1,42 +1,58 @@
-import React from "react";
-import { Users, LogOut } from "lucide-react";
+import React from 'react';
+import { Users, BarChart3, LogOut } from 'lucide-react';
 
 interface RoomHeaderProps {
   userCount: number;
+  activePollsCount?: number;
   onLeaveRoom: () => void;
 }
 
-const RoomHeader: React.FC<RoomHeaderProps> = ({ userCount, onLeaveRoom }) => {
+const RoomHeader: React.FC<RoomHeaderProps> = ({ 
+  userCount, 
+  activePollsCount = 0, 
+  onLeaveRoom 
+}) => {
   return (
-    <div className="bg-[#EAD9FF] text-purple-600 p-3 sm:p-4">
-      <div className="max-w-4xl mx-auto flex items-center justify-between">
-        <div className="flex items-center space-x-2 sm:space-x-3">
-          <h1 className="text-sm sm:text-lg md:text-xl text-black">Q&A Room</h1>
-        </div>
-        <div className="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-sm">
-          {/* <div className="hidden sm:flex items-center space-x-1">
-            <span className="text-sm sm:text-lg md:text-xl text-black">
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="max-w-4xl mx-auto px-4 py-3">
+        <div className="flex items-center justify-between">
+          {/* Left side - Room info */}
+          <div className="flex items-center space-x-4">
+            <h1 className="text-xl font-semibold text-gray-900">
               Q&A Room
-            </span>
-          </div> */}
-          <div className="flex items-center space-x-1">
-            <Users className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span className="text-xs sm:text-sm font-medium">{userCount}</span>
-            <span className="hidden sm:inline">Live</span>
+            </h1>
+            
+            {/* Stats */}
+            <div className="flex items-center space-x-4 text-sm text-gray-600">
+              {/* User count */}
+              <div className="flex items-center space-x-1">
+                <Users size={16} className="text-blue-500" />
+                <span>{userCount} participant{userCount !== 1 ? 's' : ''}</span>
+              </div>
+              
+              {/* Active polls count */}
+              {activePollsCount > 0 && (
+                <div className="flex items-center space-x-1">
+                  <BarChart3 size={16} className="text-purple-500" />
+                  <span>{activePollsCount} active poll{activePollsCount !== 1 ? 's' : ''}</span>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-          <div className="flex items-center space-x-6">
+
+          {/* Right side - Actions */}
+          <div className="flex items-center space-x-2">
             <button
               onClick={onLeaveRoom}
-              className="btn text-red-600 bg-none rounded-[25px] border-none px-2 py-1 sm:px-4 sm:py-[1px] hover:text-red-700 text-xs sm:text-sm"
+              className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             >
-              <LogOut className="w-3 h-3 sm:w-4 sm:h-4 inline" />
-              <span className="hidden sm:inline ml-1">Leave room</span>
+              <LogOut size={16} />
+              <span className="hidden sm:inline">Leave Room</span>
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </header>
   );
 };
 
