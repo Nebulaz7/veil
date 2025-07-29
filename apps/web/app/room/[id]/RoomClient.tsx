@@ -528,7 +528,14 @@ const RoomClient = () => {
 
         {/* Polls Tab */}
         {activeTab === "polls" && (
-          <PollsList polls={polls} onVote={handleVote} />
+             <PollsList
+               polls={serverPolls}
+               onVote={handleVote}
+               onCreatePoll={handleCreatePoll}
+               socket={socketInstance}
+               roomId={roomId}
+               userId={userId}
+            />
         )}
       </div>
     </div>
