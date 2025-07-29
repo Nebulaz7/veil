@@ -14,6 +14,7 @@ interface QuestionItemProps {
   onReplyInputChange: (questionId: string, value: string) => void;
   onSubmitReply: (questionId: string) => void;
   onLike: (questionId: string) => void;
+  onUnlike?: (questionId: string) => void; // Optional, for backward compatibility
 }
 
 const QuestionItem: React.FC<QuestionItemProps> = ({
@@ -27,7 +28,43 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
   onReplyInputChange,
   onSubmitReply,
   onLike,
+  onUnlike,
 }) => {
+  // State to track local upvotes (for UI display only)
+  const [localUpvoted, setLocalUpvoted] = React.useState<boolean>(
+    question.upvotedBy?.includes(userId) || false
+  );
+  const [localUpvoteCount, setLocalUpvoteCount] = React.useState<number>(
+    question.upvotes || 0
+  );
+
+  // Update local state when props change
+  React.useEffect(() => {
+    setLocalUpvoted(question.upvotedBy?.includes(userId) || false);
+    setLocalUpvoteCount(question.upvotes || 0);
+  }, [question.upvotedBy, question.upvotes, userId]);
+
+  // Handle the upvote toggle locally
+  const handleUpvoteToggle = (questionId: string) => {
+    // Toggle the local state for immediate UI feedback
+    if (localUpvoted) {
+      // If already upvoted, decrement the count and set to not upvoted
+      setLocalUpvoted(false);
+      setLocalUpvoteCount((prev) => Math.max(0, prev - 1));
+
+      // Call the backend function if provided
+      if (onUnlike) {
+        onUnlike(questionId);
+      }
+    } else {
+      // If not upvoted, increment the count and set to upvoted
+      setLocalUpvoted(true);
+      setLocalUpvoteCount((prev) => prev + 1);
+
+      // Call the backend function
+      onLike(questionId);
+    }
+  };
   return (
     <div className="bg-gray-50 border p-3 sm:p-4 rounded-lg">
       <div className="flex justify-between items-start mb-2">
@@ -64,20 +101,19 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <button
-            onClick={() => onLike(question.id)}
+            onClick={() => handleUpvoteToggle(question.id)}
             className={`text-xs sm:text-sm flex items-center space-x-2 transition-colors ${
-              question.upvotedBy?.includes(userId)
+              localUpvoted
                 ? "text-purple-600"
                 : "text-gray-600 hover:text-purple-600"
             }`}
-            disabled={question.upvotedBy?.includes(userId)}
           >
             <ThumbsUp
               className={`w-3 h-3 sm:w-4 sm:h-4 ${
-                question.upvotedBy?.includes(userId) ? "fill-current" : ""
+                localUpvoted ? "fill-current" : ""
               }`}
             />
-            <span>{question.upvotes || 0}</span>
+            <span>{localUpvoteCount}</span>
           </button>
 
           <button
