@@ -469,30 +469,17 @@ const PollsList: React.FC<PollsListProps> = ({
 
         voteOnPollViaSocket(pollId, optionId);
       } else {
-        console.warn("⚠️ No option mapping found for poll, using fallback:", {
+        console.error("❌ No option mapping found for poll:", {
           pollId,
           optionIndex,
+          availableMappings: Object.keys(pollOptionMapping),
+          requestedMapping: optionMapping,
         });
 
-        // Create a fallback option ID
-        const fallbackOptionId = `${pollId}-option-${optionIndex}`;
-        console.log("⚠️ Using fallback option ID:", fallbackOptionId);
-
-        // Update mappings for future use
-        setPollOptionMapping((prev) => ({
-          ...prev,
-          [pollId]: {
-            ...(prev[pollId] || {}),
-            [optionIndex]: fallbackOptionId,
-          },
-        }));
-
-        // Try to vote with the fallback ID
-        voteOnPollViaSocket(pollId, fallbackOptionId);
-
-        // Also request polls again to rebuild mappings for next time
+        // Fallback: try to request polls again to rebuild mappings
         console.log("🔄 Requesting fresh polls to rebuild mappings...");
         requestActivePolls();
+        return;
       }
 
       // Also call the original onVote handler if provided
@@ -530,7 +517,7 @@ const PollsList: React.FC<PollsListProps> = ({
 
     // Combine all polls: server polls first, then local polls, then parent polls
     return [...serverPolls, ...filteredLocalPolls, ...polls];
-  }, [serverPolls, localPolls, polls, pollOptionMapping]);
+  }, [serverPolls, localPolls, polls]);
 
   // For debugging
   React.useEffect(() => {
