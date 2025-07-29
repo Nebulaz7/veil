@@ -437,6 +437,20 @@ const PollsList: React.FC<PollsListProps> = ({
     setShowModal(true);
   };
 
+  // Add a new state to track which specific option each user voted for
+  const [userVoteChoices, setUserVoteChoices] = useState<{
+    [pollId: string]: number; // stores the option index the user voted for
+  }>({
+    // Initialize with any existing voted polls
+    ...votedPolls.reduce(
+      (acc, pollId) => {
+        acc[pollId] = 0; // Default to first option, will be updated on vote
+        return acc;
+      },
+      {} as { [pollId: string]: number }
+    ),
+  });
+
   // Updated vote handler - using option mapping for server polls
   const handleLocalVote = (pollId: string, optionIndex: number) => {
     // Check if this is a local poll
@@ -525,6 +539,12 @@ const PollsList: React.FC<PollsListProps> = ({
           }
           return prev;
         });
+
+        // For both local and server polls, track the user's choice
+        setUserVoteChoices((prev) => ({
+          ...prev,
+          [pollId]: optionIndex,
+        }));
 
         // Show temporary visual feedback
         const pollToUpdate = serverPolls.find((p) => p.id === pollId);
@@ -830,7 +850,8 @@ const PollsList: React.FC<PollsListProps> = ({
               <div className="space-y-2 sm:space-y-3">
                 {poll.options.map((opt, index) => {
                   const hasVoted = votedPolls.includes(poll.id);
-                  const isSelected = opt.votes > 0;
+                  const isUserChoice = userVoteChoices[poll.id] === index; // This user's specific choice
+                  const hasAnyVotes = opt.votes > 0; // Whether this option has any votes
 
                   return (
                     <div key={index}>
@@ -842,8 +863,8 @@ const PollsList: React.FC<PollsListProps> = ({
                           ]
                         }
                         className={`w-full text-left border p-2 sm:p-3 rounded transition-colors ${
-                          isSelected
-                            ? "bg-purple-50 border-purple-300"
+                          isUserChoice
+                            ? "bg-purple-50 border-purple-300" // Only highlight user's choice
                             : hasVoted
                               ? "bg-gray-50 hover:bg-gray-100"
                               : "hover:bg-gray-100"
@@ -852,13 +873,13 @@ const PollsList: React.FC<PollsListProps> = ({
                         <div className="flex justify-between text-xs sm:text-sm mb-1">
                           <span
                             className={`font-medium break-words pr-2 ${
-                              isSelected ? "text-purple-800" : "text-gray-800"
+                              isUserChoice ? "text-purple-800" : "text-gray-800"
                             }`}
                           >
                             {opt.text}
-                            {isSelected && (
+                            {isUserChoice && (
                               <span className="ml-2 text-purple-600 text-xs">
-                                (Selected)
+                                (Your Choice)
                               </span>
                             )}
                             {votesInProgress[
@@ -875,7 +896,9 @@ const PollsList: React.FC<PollsListProps> = ({
                         </div>
                         <div className="bg-gray-200 h-1.5 sm:h-2 rounded-full">
                           <div
-                            className="bg-purple-600 h-1.5 sm:h-2 rounded-full transition-all duration-300"
+                            className={`h-1.5 sm:h-2 rounded-full transition-all duration-300 ${
+                              isUserChoice ? "bg-purple-600" : "bg-gray-400"
+                            }`}
                             style={{ width: `${opt.percentage}%` }}
                           />
                         </div>
