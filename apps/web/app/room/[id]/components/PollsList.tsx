@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { BarChart3, Plus, X, AlertCircle } from "lucide-react";
 import { Poll } from "../types";
 
@@ -9,12 +9,19 @@ interface PollsListProps {
     question: string;
     options: { text: string }[];
   }) => void;
+  // Add WebSocket and room props
+  socket?: any;
+  roomId: string;
+  userId: string;
 }
 
 const PollsList: React.FC<PollsListProps> = ({
   polls,
   onVote,
   onCreatePoll,
+  socket,
+  roomId,
+  userId,
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [pollTitle, setPollTitle] = useState("");
@@ -27,8 +34,170 @@ const PollsList: React.FC<PollsListProps> = ({
   const [localPolls, setLocalPolls] = useState<Poll[]>([]);
   // State to track which polls the user has already voted on
   const [votedPolls, setVotedPolls] = useState<string[]>([]);
+  // State for WebSocket connection status
+  const [isConnected, setIsConnected] = useState(false);
 
   const modalRef = useRef<HTMLDivElement>(null);
+
+  // WebSocket event listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    // Check connection status
+    setIsConnected(socket.connected);
+
+    // Listen for new polls from other users
+    const handleNewPoll = (poll: any) => {
+      console.log('📊 New poll received:', poll);
+      // Convert server poll format to component format if needed
+      const formattedPoll: Poll = {
+        id: poll.id,
+        question: poll.question,
+        options: poll.options.map((opt: any) => ({
+          text: opt.text,
+          votes: 0,
+          percentage: 0
+        })),
+        totalVotes: 0,
+        timeLeft: poll.expiresAt ? calculateTimeLeft(poll.expiresAt) : "2:00"
+      };
+      
+      // Remove from local polls if it exists and add to server polls
+      setLocalPolls(prev => prev.filter(p => p.question !== poll.question));
+    };
+
+    // Listen for poll votes
+    const handlePollVoteAdded = (voteData: any) => {
+      console.log('🗳️ Vote added:', voteData);
+      // Update poll vote counts - this would typically update the polls prop
+      // You might want to call a parent function to update the polls state
+    };
+
+    // Listen for vote confirmation
+    const handleVoteConfirmed = (data: any) => {
+      console.log('✅ Vote confirmed:', data);
+      // Add poll to voted polls if not already there
+      setVotedPolls(prev => {
+        if (!prev.includes(data.pollId)) {
+          return [...prev, data.pollId];
+        }
+        return prev;
+      });
+    };
+
+    // Listen for poll closure
+    const handlePollClosed = (data: any) => {
+      console.log('📊 Poll closed:', data);
+      // Handle poll closure - maybe show a notification or update UI
+    };
+
+    // Listen for rate limit errors
+    const handleRateLimitError = (data: any) => {
+      console.warn('⏰ Rate limit error:', data.message);
+      alert(data.message); // You might want to use a proper notification system
+    };
+
+    // Listen for poll errors
+    const handlePollError = (data: any) => {
+      console.error('❌ Poll error:', data.message);
+      alert(data.message); // You might want to use a proper notification system
+    };
+
+    // Listen for connection status changes
+    const handleConnect = () => {
+      console.log('🟢 Socket connected');
+      setIsConnected(true);
+      // Request active polls when connected
+      requestActivePolls();
+    };
+
+    const handleDisconnect = () => {
+      console.log('🔴 Socket disconnected');
+      setIsConnected(false);
+    };
+
+    // Add event listeners
+    socket.on('newPoll', handleNewPoll);
+    socket.on('pollVoteAdded', handlePollVoteAdded);
+    socket.on('voteConfirmed', handleVoteConfirmed);
+    socket.on('pollClosed', handlePollClosed);
+    socket.on('rateLimitError', handleRateLimitError);
+    socket.on('pollError', handlePollError);
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+
+    // Request active polls on mount
+    requestActivePolls();
+
+    // Cleanup listeners on unmount
+    return () => {
+      socket.off('newPoll', handleNewPoll);
+      socket.off('pollVoteAdded', handlePollVoteAdded);
+      socket.off('voteConfirmed', handleVoteConfirmed);
+      socket.off('pollClosed', handlePollClosed);
+      socket.off('rateLimitError', handleRateLimitError);
+      socket.off('pollError', handlePollError);
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+    };
+  }, [socket, roomId]);
+
+  // Helper function to calculate time left
+  const calculateTimeLeft = (expiresAt: string): string => {
+    const now = new Date().getTime();
+    const expiry = new Date(expiresAt).getTime();
+    const difference = expiry - now;
+
+    if (difference <= 0) return "Expired";
+
+    const minutes = Math.floor(difference / (1000 * 60));
+    const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+    
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // WebSocket function to request active polls
+  const requestActivePolls = () => {
+    if (socket && isConnected) {
+      console.log('📊 Requesting active polls for room:', roomId);
+      socket.emit('getActivePolls', { roomId });
+    }
+  };
+
+  // WebSocket function to create a poll
+  const createPollViaSocket = (pollData: { question: string; options: string[] }) => {
+    if (!socket || !isConnected) {
+      console.error('❌ Socket not connected');
+      alert('Not connected to server. Please try again.');
+      return;
+    }
+
+    console.log('📊 Creating poll via socket:', pollData);
+    socket.emit('createPoll', {
+      roomId,
+      userId,
+      name: pollData.question, // Using question as name for now
+      question: pollData.question,
+      options: pollData.options
+    });
+  };
+
+  // WebSocket function to vote on a poll
+  const voteOnPollViaSocket = (pollId: string, optionId: string) => {
+    if (!socket || !isConnected) {
+      console.error('❌ Socket not connected');
+      alert('Not connected to server. Please try again.');
+      return;
+    }
+
+    console.log('🗳️ Voting via socket:', { pollId, optionId });
+    socket.emit('votePoll', {
+      roomId,
+      pollId,
+      optionId,
+      userId
+    });
+  };
 
   // Close modal when clicking outside
   const handleClickOutside = (e: React.MouseEvent) => {
@@ -82,35 +251,36 @@ const PollsList: React.FC<PollsListProps> = ({
 
     const filteredOptions = pollOptions
       .filter((opt) => opt.trim() !== "")
-      .map((text) => ({ text, votes: 0, percentage: 0 }));
+      .map((text) => text.trim());
 
-    // Generate a temporary unique ID for the local poll
-    const tempPoll: Poll = {
-      id: `temp-${Date.now()}`,
-      question: pollTitle,
-      options: filteredOptions,
-      totalVotes: 0,
-      timeLeft: "", // No time limit
-    };
-
-    // Add the new poll to local state - use the spread operator with previous polls
-    setLocalPolls((prev) => {
-      const updatedPolls = [tempPoll, ...prev];
-      return updatedPolls;
-    });
-
-    if (onCreatePoll) {
-      // Still send to parent component for server processing
-      onCreatePoll({
-        question: pollTitle,
-        options: filteredOptions.map(({ text }) => ({ text })),
+    // Create poll via WebSocket instead of local state
+    if (socket && isConnected) {
+      createPollViaSocket({
+        question: pollTitle.trim(),
+        options: filteredOptions
       });
+    } else {
+      // Fallback to local creation if socket not available
+      const tempPoll: Poll = {
+        id: `temp-${Date.now()}`,
+        question: pollTitle,
+        options: filteredOptions.map(text => ({ text, votes: 0, percentage: 0 })),
+        totalVotes: 0,
+        timeLeft: "2:00",
+      };
+
+      setLocalPolls((prev) => [tempPoll, ...prev]);
+
+      if (onCreatePoll) {
+        onCreatePoll({
+          question: pollTitle,
+          options: filteredOptions.map(text => ({ text })),
+        });
+      }
     }
 
-    // Close the modal
+    // Close the modal and reset form
     setShowModal(false);
-
-    // Reset form for next use
     setPollTitle("");
     setPollOptions(["", ""]);
     setErrors({});
@@ -124,52 +294,43 @@ const PollsList: React.FC<PollsListProps> = ({
     setShowModal(true);
   };
 
-  // Local handler for voting on polls - only for temporary polls
+  // Updated vote handler to use WebSocket
   const handleLocalVote = (pollId: string, optionIndex: number) => {
     // Check if this is a local poll
     if (pollId.startsWith("temp-")) {
-      // Check if user has already voted on this poll
+      // Handle local poll voting (existing logic)
       const alreadyVoted = votedPolls.includes(pollId);
 
       setLocalPolls((prevPolls) => {
         const updatedPolls = prevPolls.map((poll) => {
           if (poll.id === pollId) {
-            // Create a copy of the options
             const newOptions = [...poll.options];
 
-            // If already voted, we need to remove the previous vote
             if (alreadyVoted) {
-              // Find the option that was previously voted on and decrement its votes
               for (let i = 0; i < newOptions.length; i++) {
                 const option = newOptions[i];
-                // Assume a user voted for the option with a non-zero vote count
                 if (option && option.votes > 0) {
                   newOptions[i] = {
-                    text: option.text, // Preserve the text property
+                    text: option.text,
                     votes: option.votes - 1,
-                    percentage: option.percentage, // Preserve percentage, will be recalculated later
+                    percentage: option.percentage,
                   };
-                  break; // Only remove one vote
+                  break;
                 }
               }
             }
 
-            // Get the selected option
             const selectedOption = newOptions[optionIndex];
-
             if (selectedOption) {
-              // Increment vote count for the selected option
               newOptions[optionIndex] = {
                 ...selectedOption,
                 votes: selectedOption.votes + 1,
               };
 
-              // Calculate new total votes (stays the same if changing vote)
               const newTotalVotes = alreadyVoted
                 ? poll.totalVotes
                 : poll.totalVotes + 1;
 
-              // Recalculate percentages for all options
               const updatedOptions = newOptions.map((opt) => ({
                 ...opt,
                 percentage:
@@ -178,7 +339,6 @@ const PollsList: React.FC<PollsListProps> = ({
                     : 0,
               }));
 
-              // Return updated poll
               return {
                 ...poll,
                 options: updatedOptions,
@@ -192,44 +352,51 @@ const PollsList: React.FC<PollsListProps> = ({
         return updatedPolls;
       });
 
-      // If not already voted, add to voted polls
       if (!alreadyVoted) {
         setVotedPolls((prev) => [...prev, pollId]);
       }
-      // If already voted, no need to update votedPolls
     } else {
-      // If it's a server poll, call the parent handler
-      // Check if already voted on this poll
-      const alreadyVoted = votedPolls.includes(pollId);
-
-      // Call the parent handler
-      onVote(pollId, optionIndex);
-
-      // If not already voted, add to voted polls
-      if (!alreadyVoted) {
-        setVotedPolls((prev) => [...prev, pollId]);
+      // Handle server poll voting via WebSocket
+      const poll = polls.find(p => p.id === pollId);
+      if (poll && poll.options[optionIndex]) {
+        // For server polls, we need to send the actual option ID
+        // Assuming the option has an ID field, or we use the index
+        const optionId = poll.options[optionIndex].id || `option-${optionIndex}`;
+        voteOnPollViaSocket(pollId, optionId);
       }
+
+      // Also call the original onVote handler if provided
+      onVote(pollId, optionIndex);
     }
-  }; // Combine server polls with local polls for display
+  };
+
+  // Combine server polls with local polls for display
   const allPolls = React.useMemo(() => {
-    // Filter out local polls that might have already been added from the server
-    // based on question text matching
     const filteredLocalPolls = localPolls.filter(
       (localPoll) => !polls.some((poll) => poll.question === localPoll.question)
     );
 
-    // Add the local polls first, then the server polls
     return [...filteredLocalPolls, ...polls];
   }, [polls, localPolls]);
 
   // For debugging
   React.useEffect(() => {
-    // Log poll updates for development purposes
     console.log(`Total polls: ${allPolls.length}`);
   }, [allPolls]);
 
   return (
     <div className="space-y-4 sm:space-y-6 pb-4 sm:pb-0">
+      {/* Connection status indicator */}
+      {socket && (
+        <div className={`text-xs px-2 py-1 rounded ${
+          isConnected 
+            ? 'bg-green-100 text-green-800' 
+            : 'bg-red-100 text-red-800'
+        }`}>
+          {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+        </div>
+      )}
+
       {showModal && (
         <div
           className="fixed inset-0 bg-white bg-opacity-50 z-50 flex items-center justify-center p-4"
@@ -242,7 +409,7 @@ const PollsList: React.FC<PollsListProps> = ({
           >
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900">
-                Create Live Poll
+                Create Live Poll {socket && !isConnected && '(Offline Mode)'}
               </h3>
               <button
                 onClick={() => setShowModal(false)}
@@ -326,7 +493,12 @@ const PollsList: React.FC<PollsListProps> = ({
               </button>
               <button
                 onClick={handleSubmit}
-                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                disabled={socket && !isConnected}
+                className={`px-4 py-2 rounded-md text-white ${
+                  socket && !isConnected
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-purple-600 hover:bg-purple-700'
+                }`}
               >
                 Create Poll
               </button>
@@ -385,12 +557,17 @@ const PollsList: React.FC<PollsListProps> = ({
                 </h3>
                 <div className="text-xs sm:text-sm text-left sm:text-right flex-shrink-0">
                   <div className="text-gray-600">{poll.totalVotes} votes</div>
+                  {poll.timeLeft && (
+                    <div className="text-purple-600 font-medium">
+                      {poll.timeLeft}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="space-y-2 sm:space-y-3">
                 {poll.options.map((opt, index) => {
                   const hasVoted = votedPolls.includes(poll.id);
-                  const isSelected = opt.votes > 0; // Check if this option has votes
+                  const isSelected = opt.votes > 0;
 
                   return (
                     <div key={index}>
