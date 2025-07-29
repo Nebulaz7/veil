@@ -3,52 +3,16 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { socket } from "../../lib/socket";
-import {
-  SendHorizonal,
-  MessageSquare,
-  BarChart3,
-  Users,
-  ThumbsUp,
-  Clock,
-  LogOut,
-  AlertCircle,
-  ChevronDown,
-  ChevronUp,
-  Reply,
-} from "lucide-react";
 
-interface Question {
-  id: string;
-  user: string;
-  question: string;
-  timestamp: string;
-  upvotes: number;
-  answered: boolean;
-  answer?: string;
-  upvotedBy?: string[];
-  replies?: Reply[];
-}
+// Import types
+import { Question, Reply, Poll } from "./types";
 
-interface Reply {
-  id: string;
-  user: string;
-  content: string;
-  timestamp: string;
-}
-
-interface PollOption {
-  text: string;
-  votes: number;
-  percentage: number;
-}
-
-interface Poll {
-  id: string;
-  question: string;
-  options: PollOption[];
-  totalVotes: number;
-  timeLeft: string;
-}
+// Import components
+import RoomHeader from "./components/RoomHeader";
+import TabNavigation from "./components/TabNavigation";
+import QuestionInput from "./components/QuestionInput";
+import QuestionsList from "./components/QuestionsList";
+import PollsList from "./components/PollsList";
 
 interface Props {
   roomId: string;
@@ -524,409 +488,47 @@ const RoomClient = () => {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <div className="bg-[#EAD9FF] text-purple-600 p-3 sm:p-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-2 sm:space-x-3">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Veil</h1>
-          </div>
-          <div className="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-sm">
-            <div className="hidden sm:flex items-center space-x-1">
-              <span className="text-sm sm:text-lg md:text-xl text-black">
-                Q&A Room
-              </span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <Users className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span className="text-xs sm:text-sm font-medium">
-                {userCount}
-              </span>
-              <span className="hidden sm:inline">Live</span>
-            </div>
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            <div className="flex items-center space-x-6">
-              <button
-                onClick={HandleLeaveRoom}
-                className="btn bg-red-600 text-white rounded-[25px] border-none px-2 py-1 sm:px-4 sm:py-[1px] hover:bg-red-700 text-xs sm:text-sm"
-              >
-                <LogOut className="w-3 h-3 sm:w-4 sm:h-4 inline" />
-                <span className="hidden sm:inline ml-1">Leave room</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <RoomHeader userCount={userCount} onLeaveRoom={HandleLeaveRoom} />
 
       <div className="max-w-4xl mx-auto p-2 sm:p-4">
         {/* Tabs */}
-        <div className="border-b border-gray-200 mb-4 sm:mb-6">
-          <nav className="flex space-x-4 sm:space-x-8 justify-center">
-            <button
-              onClick={() => setActiveTab("qa")}
-              className={`flex items-center cursor-pointer space-x-1 sm:space-x-2 py-2 px-1 border-b-2 font-medium text-xs sm:text-sm ${activeTab === "qa" ? "border-purple-500 text-purple-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}
-            >
-              <MessageSquare className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span>Q&A</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("polls")}
-              className={`flex items-center cursor-pointer space-x-1 sm:space-x-2 py-2 px-1 border-b-2 font-medium text-xs sm:text-sm ${activeTab === "polls" ? "border-purple-500 text-purple-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}
-            >
-              <BarChart3 className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span>Polls</span>
-            </button>
-          </nav>
-        </div>
+        <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
         {/* QA Tab */}
         {activeTab === "qa" && (
           <>
-            {/* Fixed input section at bottom */}
-            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-2 sm:p-4 shadow-lg z-50">
-              <div className="max-w-4xl mx-auto">
-                {/* Rate limit notification */}
-                {rateLimitRemaining > 0 && (
-                  <div className="mb-3 p-2 sm:p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center space-x-2">
-                    <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                    <div className="flex-1">
-                      <p className="text-sm text-amber-800">
-                        {rateLimitMessage}
-                      </p>
-                    </div>
-                    <div className="flex items-center space-x-2 text-amber-700">
-                      <Clock className="w-3 h-3" />
-                      <span className="text-sm font-medium tabular-nums">
-                        {rateLimitRemaining}s
-                      </span>
-                    </div>
-                  </div>
-                )}
+            {/* Question Input */}
+            <QuestionInput
+              newQuestion={newQuestion}
+              onQuestionChange={setNewQuestion}
+              onSubmitQuestion={handleSubmitQuestion}
+              onImproveAi={handleImproveAi}
+              isRoomLoading={isRoomLoading}
+              isLoading={isLoading}
+              rateLimitRemaining={rateLimitRemaining}
+              rateLimitMessage={rateLimitMessage}
+            />
 
-                <div className="relative">
-                  {/* Main input container */}
-                  <div
-                    className={`flex items-center bg-gray-50 border rounded-xl sm:rounded-2xl focus-within:bg-white transition-all duration-200 ${
-                      rateLimitRemaining > 0
-                        ? "border-amber-300 focus-within:border-amber-400"
-                        : "border-gray-300 focus-within:border-purple-500"
-                    }`}
-                  >
-                    <textarea
-                      value={newQuestion}
-                      onChange={(e) => setNewQuestion(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSubmitQuestion();
-                        }
-                      }}
-                      placeholder={
-                        rateLimitRemaining > 0
-                          ? `Please wait ${rateLimitRemaining}s before sending another question...`
-                          : "Ask your question..."
-                      }
-                      disabled={isRoomLoading || rateLimitRemaining > 0}
-                      rows={1}
-                      className="flex-1 p-2 sm:p-4 pr-16 sm:pr-24 bg-transparent border-none rounded-xl sm:rounded-2xl focus:outline-none placeholder-gray-500 text-gray-900 resize-none overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
-                      style={{
-                        minHeight: "44px",
-                        maxHeight: "120px",
-                      }}
-                      onInput={(e) => {
-                        const target = e.target as HTMLTextAreaElement;
-                        target.style.height = "auto";
-                        target.style.height = target.scrollHeight + "px";
-                      }}
-                    />
-
-                    {/* Button container inside input */}
-                    <div className="flex items-center space-x-1 sm:space-x-2 pr-2 sm:pr-3">
-                      {/* Enhance with AI button */}
-                      <button
-                        onClick={handleImproveAi}
-                        disabled={
-                          isRoomLoading ||
-                          isLoading ||
-                          !newQuestion.trim() ||
-                          rateLimitRemaining > 0
-                        }
-                        className="flex cursor-pointer items-center space-x-1 px-2 py-1 sm:px-3 sm:py-1.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-xs font-medium rounded-full hover:from-blue-600 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
-                      >
-                        {isLoading ? (
-                          <>
-                            <svg
-                              className="w-2 h-2 sm:w-3 sm:h-3 animate-spin"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                            >
-                              <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                strokeWidth="4"
-                              ></circle>
-                              <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                              ></path>
-                            </svg>
-                            <span className="hidden sm:inline">
-                              Improving...
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <svg
-                              className="w-2 h-2 sm:w-3 sm:h-3"
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
-                            </svg>
-                            <span className="hidden sm:inline">Improve</span>
-                          </>
-                        )}
-                      </button>
-
-                      {/* Send button */}
-                      <button
-                        onClick={handleSubmitQuestion}
-                        disabled={
-                          isRoomLoading ||
-                          !newQuestion.trim() ||
-                          rateLimitRemaining > 0
-                        }
-                        className={`flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 text-white rounded-full transition-all duration-200 shadow-sm ${
-                          rateLimitRemaining > 0
-                            ? "bg-amber-400 cursor-not-allowed"
-                            : "bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 disabled:cursor-not-allowed"
-                        }`}
-                      >
-                        {rateLimitRemaining > 0 ? (
-                          <span className="text-xs font-medium tabular-nums">
-                            {rateLimitRemaining}
-                          </span>
-                        ) : (
-                          <SendHorizonal className="w-3 h-3 sm:w-4 sm:h-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Questions list */}
-            <div className="space-y-3 sm:space-y-4 pb-20 sm:pb-24">
-              <div ref={messagesEndRef} />
-              {questions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center px-4">
-                  <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
-                    <MessageSquare className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
-                  </div>
-                  <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">
-                    No questions yet
-                  </h3>
-                  <p className="text-gray-500 max-w-sm text-sm sm:text-base">
-                    Be the first to ask a question! Your question will appear
-                    here once submitted.
-                  </p>
-                </div>
-              ) : (
-                questions.map((q) => (
-                  <div
-                    key={q.id}
-                    className="bg-gray-50 border p-3 sm:p-4 rounded-lg"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center space-x-2 flex-1 min-w-0">
-                        <span className="font-medium text-sm sm:text-base truncate">
-                          {q.user}
-                        </span>
-                        <div className="text-xs sm:text-sm text-gray-500 flex items-center space-x-1">
-                          <Clock className="w-2 h-2 sm:w-3 sm:h-3 flex-shrink-0" />
-                          <span className="truncate">{q.timestamp}</span>
-                        </div>
-                      </div>
-                      {q.answered && (
-                        <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full flex-shrink-0 ml-2">
-                          Answered
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-gray-800 mb-3 text-sm sm:text-base break-words">
-                      {q.question}
-                    </p>
-                    {q.answer && (
-                      <div className="bg-white border-l-4 border-purple-500 p-2 sm:p-3 rounded mb-2">
-                        <p className="text-xs sm:text-sm text-gray-700 font-medium">
-                          Answer:
-                        </p>
-                        <p className="text-sm sm:text-base text-black break-words">
-                          {q.answer}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Action buttons row */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <button
-                          onClick={() => handleLike(q.id)}
-                          className={`text-xs sm:text-sm flex items-center space-x-2 transition-colors ${
-                            q.upvotedBy?.includes(userId)
-                              ? "text-purple-600"
-                              : "text-gray-600 hover:text-purple-600"
-                          }`}
-                          disabled={q.upvotedBy?.includes(userId)}
-                        >
-                          <ThumbsUp
-                            className={`w-3 h-3 sm:w-4 sm:h-4 ${
-                              q.upvotedBy?.includes(userId)
-                                ? "fill-current"
-                                : ""
-                            }`}
-                          />
-                          <span>{q.upvotes || 0}</span>
-                        </button>
-
-                        <button
-                          onClick={() => toggleQuestionExpanded(q.id)}
-                          className="text-xs sm:text-sm flex items-center space-x-1 text-gray-600 hover:text-purple-600 transition-colors"
-                        >
-                          <Reply className="w-3 h-3 sm:w-4 sm:h-4" />
-                          <span>Reply</span>
-                          {expandedQuestions.has(q.id) ? (
-                            <ChevronUp className="w-3 h-3 sm:w-4 sm:h-4" />
-                          ) : (
-                            <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4" />
-                          )}
-                        </button>
-                      </div>
-
-                      {q.replies && q.replies.length > 0 && (
-                        <span className="text-xs text-gray-500">
-                          {q.replies.length}{" "}
-                          {q.replies.length === 1 ? "reply" : "replies"}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Expanded replies section */}
-                    {expandedQuestions.has(q.id) && (
-                      <div className="mt-4 space-y-3">
-                        {/* Existing replies */}
-                        {q.replies && q.replies.length > 0 && (
-                          <div className="space-y-2">
-                            {q.replies.map((reply) => (
-                              <div
-                                key={reply.id}
-                                className="bg-white border text-black border-gray-200 p-3 rounded-lg ml-4"
-                              >
-                                <div className="flex items-center space-x-2 mb-1">
-                                  <span className="font-medium text-xs sm:text-sm text-gray-700">
-                                    {reply.user}
-                                  </span>
-                                  {/*  <div className="text-xs text-gray-500 flex items-center space-x-1">
-                                    <Clock className="w-2 h-2 flex-shrink-0" />
-                                    <span>{reply.timestamp}</span>
-                                  </div>*/}
-                                </div>
-                                <p className="text-xs sm:text-sm text-black break-words">
-                                  {reply.content}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Reply input */}
-                        <div className="ml-4">
-                          <div className="flex items-center space-x-2 bg-white border border-gray-300 rounded-lg focus-within:border-purple-500 transition-colors">
-                            <input
-                              type="text"
-                              value={replyInputs[q.id] || ""}
-                              onChange={(e) =>
-                                handleReplyInputChange(q.id, e.target.value)
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" && !e.shiftKey) {
-                                  e.preventDefault();
-                                  handleSubmitReply(q.id);
-                                }
-                              }}
-                              placeholder={
-                                rateLimitRemaining > 0
-                                  ? `Please wait ${rateLimitRemaining}s...`
-                                  : "Write a reply..."
-                              }
-                              disabled={
-                                isSubmittingReply[q.id] ||
-                                rateLimitRemaining > 0
-                              }
-                              className="flex-1 p-2 sm:p-3 bg-transparent border-none rounded-lg focus:outline-none placeholder-gray-500 text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
-                            />
-                            <button
-                              onClick={() => handleSubmitReply(q.id)}
-                              disabled={
-                                !replyInputs[q.id]?.trim() ||
-                                isSubmittingReply[q.id] ||
-                                rateLimitRemaining > 0
-                              }
-                              className="flex items-center justify-center w-8 h-8 text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 disabled:cursor-not-allowed rounded-full transition-colors mr-2"
-                            >
-                              {isSubmittingReply[q.id] ? (
-                                <svg
-                                  className="w-3 h-3 animate-spin"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                  ></circle>
-                                  <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                  ></path>
-                                </svg>
-                              ) : (
-                                <SendHorizonal className="w-3 h-3" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
+            {/* Questions List */}
+            <QuestionsList
+              questions={questions}
+              userId={userId}
+              expandedQuestions={expandedQuestions}
+              replyInputs={replyInputs}
+              isSubmittingReply={isSubmittingReply}
+              rateLimitRemaining={rateLimitRemaining}
+              onToggleQuestionExpanded={toggleQuestionExpanded}
+              onReplyInputChange={handleReplyInputChange}
+              onSubmitReply={handleSubmitReply}
+              onLike={handleLike}
+              messagesEndRef={messagesEndRef}
+            />
           </>
         )}
 
         {/* Polls Tab */}
         {activeTab === "polls" && (
-          <div className="space-y-4 sm:space-y-6 pb-4 sm:pb-0">
-            <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center px-4">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
-                <BarChart3 className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
-              </div>
-              <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">
-                No polls available
-              </h3>
-              <p className="text-gray-500 max-w-sm text-sm sm:text-base">
-                This feature is under development. Polls will be available soon.
-              </p>
-            </div>
-          </div>
+          <PollsList polls={polls} onVote={handleVote} />
         )}
       </div>
     </div>
