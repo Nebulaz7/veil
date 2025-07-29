@@ -161,19 +161,27 @@ const RoomClient = () => {
     socket.on("questionReplied", handleQuestionReplied);
     socket.on("rateLimitError", handleRateLimitError);
 
-    const fetchPolls = async () => {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch(
-        `https://veil-1qpe.onrender.com/rooms/${roomId}/polls`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      const data = await res.json();
-      setPolls(data);
+    // Add socket handler for polls
+    const handlePollsList = (pollsList: Poll[]) => {
+      setPolls(pollsList);
     };
-    fetchPolls();
+
+    const handleNewPoll = (poll: Poll) => {
+      setPolls((prev) => [...prev, poll]);
+    };
+
+    const handlePollUpdated = (updatedPoll: Poll) => {
+      setPolls((prev) =>
+        prev.map((p) => (p.id === updatedPoll.id ? updatedPoll : p))
+      );
+    };
+
+    socket.on("pollsList", handlePollsList);
+    socket.on("newPoll", handleNewPoll);
+    socket.on("pollUpdated", handlePollUpdated);
+
+    // Request polls via socket instead of HTTP
+    socket.emit("getActivePolls", { roomId });
 
     const fetchUserCount = async () => {
       try {
@@ -210,7 +218,6 @@ const RoomClient = () => {
       }
     };
 
-    fetchPolls();
     fetchUserCount();
 
     return () => {
@@ -218,6 +225,9 @@ const RoomClient = () => {
       socket.off("questionsList", handleQuestionsList);
       socket.off("questionReplied", handleQuestionReplied);
       socket.off("rateLimitError", handleRateLimitError);
+      socket.off("pollsList", handlePollsList);
+      socket.off("newPoll", handleNewPoll);
+      socket.off("pollUpdated", handlePollUpdated);
     };
   }, [roomId]);
 
@@ -458,64 +468,44 @@ const RoomClient = () => {
     socket.emit("upvoteQuestion", { roomId, questionId });
   };
 
-  const handleVote = async (pollId: string, optionIndex: number) => {
-    const token = localStorage.getItem("auth_token");
+  const handleVote = (pollId: string, optionIndex: number) => {
+    if (!socket) return;
 
-    try {
-      await fetch(`https://veil-1qpe.onrender.com/polls/${pollId}/vote`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ optionIndex }),
-      });
+    // Use the socket to emit vote event
+    socket.emit("votePoll", {
+      roomId,
+      pollId,
+      userId,
+      optionIndex,
+    });
 
-      // re-fetch poll results
-      const res = await fetch(
-        `https://veil-1qpe.onrender.com/rooms/${roomId}/polls`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      const updated = await res.json();
-      setPolls(updated);
-    } catch (err) {
-      console.error("Vote failed:", err);
-    }
+    // No need to re-fetch polls as we'll get updates via socket events
   };
 
-  async function handleCreatePoll(poll: { question: string; options: { text: string }[] }): Promise<void> {
+  async function handleCreatePoll(poll: {
+    question: string;
+    options: { text: string }[];
+  }): Promise<void> {
     const token = localStorage.getItem("auth_token");
     if (!token) {
       alert("You must be logged in to create a poll.");
       return;
     }
+
     try {
-      const res = await fetch(`https://veil-1qpe.onrender.com/rooms/${roomId}/polls`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          question: poll.question,
-          options: poll.options.map((opt) => opt.text),
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Failed to create poll");
+      if (!socket) {
+        throw new Error("Socket connection not available");
       }
-      // Refresh polls after creation
-      const updated = await fetch(
-        `https://veil-1qpe.onrender.com/rooms/${roomId}/polls`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      const updatedPolls = await updated.json();
-      setPolls(updatedPolls);
+
+      // Use socket to create poll instead of HTTP
+      socket.emit("createPoll", {
+        roomId,
+        userId,
+        question: poll.question,
+        options: poll.options.map((opt) => opt.text),
+      });
+
+      // No need to refresh polls as we'll get updates via socket events
     } catch (error) {
       console.error("Error creating poll:", error);
       alert("Failed to create poll. Please try again.");
@@ -565,14 +555,14 @@ const RoomClient = () => {
 
         {/* Polls Tab */}
         {activeTab === "polls" && (
-             <PollsList
-               polls={polls}
-               onVote={handleVote}
-               onCreatePoll={handleCreatePoll}
-               socket={socket}
-               roomId={roomId}
-               userId={userId}
-            />
+          <PollsList
+            polls={polls}
+            onVote={handleVote}
+            onCreatePoll={handleCreatePoll}
+            socket={socket}
+            roomId={roomId}
+            userId={userId}
+          />
         )}
       </div>
     </div>
