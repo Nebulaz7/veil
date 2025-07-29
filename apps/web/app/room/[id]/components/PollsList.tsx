@@ -164,6 +164,7 @@ const PollsList: React.FC<PollsListProps> = ({
     // Listen for vote confirmation
     const handleVoteConfirmed = (data: any) => {
       console.log("✅ Vote confirmed:", data);
+
       // Add poll to voted polls if not already there
       setVotedPolls((prev) => {
         if (!prev.includes(data.pollId)) {
@@ -171,8 +172,12 @@ const PollsList: React.FC<PollsListProps> = ({
         }
         return prev;
       });
-      // Refresh polls to show updated results
-      requestActivePolls();
+
+      // Delay the polls refresh slightly to ensure the server has processed the vote
+      setTimeout(() => {
+        console.log("🔄 Refreshing polls after vote confirmation");
+        requestActivePolls();
+      }, 500);
     };
 
     // Listen for poll closure
@@ -185,7 +190,27 @@ const PollsList: React.FC<PollsListProps> = ({
     // Listen for poll errors
     const handlePollError = (data: any) => {
       console.error("❌ Poll error:", data.message);
-      alert(data.message); // You might want to use a proper notification system
+
+      // Check for specific error types and handle appropriately
+      if (data.message.includes("not found")) {
+        // The poll or option wasn't found - this might be a timing issue
+        console.log(
+          "⚠️ This appears to be a timing issue. Refreshing polls..."
+        );
+
+        // Delay the refresh slightly to give the server time to complete any pending operations
+        setTimeout(() => {
+          requestActivePolls();
+        }, 500);
+
+        // Provide a more helpful message to the user
+        alert(
+          "Your vote is being processed. Please try again in a moment if needed."
+        );
+      } else {
+        // For other errors, show the original message
+        alert(`Error: ${data.message}`);
+      }
     };
 
     // Listen for connection status changes
@@ -270,7 +295,7 @@ const PollsList: React.FC<PollsListProps> = ({
     });
   };
 
-  // WebSocket function to vote on a poll
+  // WebSocket function to vote on a poll with retry logic
   const voteOnPollViaSocket = (pollId: string, optionId: string) => {
     if (!socket || !isConnected) {
       console.error("❌ Socket not connected");
@@ -279,12 +304,16 @@ const PollsList: React.FC<PollsListProps> = ({
     }
 
     console.log("🗳️ Voting via socket:", { pollId, optionId });
-    socket.emit("votePoll", {
-      roomId,
-      pollId,
-      optionId,
-      userId,
-    });
+
+    // Add a short delay to ensure poll is fully created on the server
+    setTimeout(() => {
+      socket.emit("votePoll", {
+        roomId,
+        pollId,
+        optionId,
+        userId,
+      });
+    }, 300); // 300ms delay
   };
 
   // Close modal when clicking outside
@@ -467,19 +496,86 @@ const PollsList: React.FC<PollsListProps> = ({
           optionId,
         });
 
+        // Add this poll to voted polls optimistically to provide feedback
+        setVotedPolls((prev) => {
+          if (!prev.includes(pollId)) {
+            return [...prev, pollId];
+          }
+          return prev;
+        });
+
+        // Show temporary visual feedback
+        const pollToUpdate = serverPolls.find((p) => p.id === pollId);
+        if (pollToUpdate) {
+          // Create a temporary update of the poll with the new vote
+          const tempUpdatedPolls = serverPolls.map((poll) => {
+            if (poll.id === pollId) {
+              // Clone the options array
+              const newOptions = [...poll.options];
+              // Update the selected option
+              if (newOptions[optionIndex]) {
+                newOptions[optionIndex] = {
+                  ...newOptions[optionIndex],
+                  votes: newOptions[optionIndex].votes + 1,
+                };
+
+                // Update total votes
+                const newTotalVotes = poll.totalVotes + 1;
+
+                // Recalculate percentages
+                const updatedOptions = newOptions.map((opt) => ({
+                  ...opt,
+                  percentage:
+                    newTotalVotes > 0
+                      ? Math.round((opt.votes / newTotalVotes) * 100)
+                      : 0,
+                }));
+
+                return {
+                  ...poll,
+                  options: updatedOptions,
+                  totalVotes: newTotalVotes,
+                };
+              }
+            }
+            return poll;
+          });
+
+          // Update the state with our temporary changes
+          setServerPolls(tempUpdatedPolls);
+        }
+
+        // Send the vote to the server
         voteOnPollViaSocket(pollId, optionId);
       } else {
-        console.error("❌ No option mapping found for poll:", {
+        console.warn("⚠️ No option mapping found for poll:", {
           pollId,
           optionIndex,
           availableMappings: Object.keys(pollOptionMapping),
           requestedMapping: optionMapping,
         });
 
-        // Fallback: try to request polls again to rebuild mappings
-        console.log("🔄 Requesting fresh polls to rebuild mappings...");
-        requestActivePolls();
-        return;
+        // Create a fallback option ID
+        const fallbackOptionId = `${pollId}-option-${optionIndex}`;
+        console.log("⚠️ Using fallback option ID:", fallbackOptionId);
+
+        // Update mappings for future use
+        setPollOptionMapping((prev) => ({
+          ...prev,
+          [pollId]: {
+            ...(prev[pollId] || {}),
+            [optionIndex]: fallbackOptionId,
+          },
+        }));
+
+        // Try to vote with the fallback ID
+        voteOnPollViaSocket(pollId, fallbackOptionId);
+
+        // Also request polls again to rebuild mappings
+        setTimeout(() => {
+          console.log("🔄 Requesting fresh polls to rebuild mappings...");
+          requestActivePolls();
+        }, 800);
       }
 
       // Also call the original onVote handler if provided
