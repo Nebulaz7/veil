@@ -41,7 +41,7 @@ const PollsList: React.FC<PollsListProps> = ({
   const [votedPolls, setVotedPolls] = useState<string[]>([]);
   // State to store mapping of poll options to their server IDs
   const [pollOptionMapping, setPollOptionMapping] = useState<{
-    [pollId: string]: { [optionIndex: number]: string }
+    [pollId: string]: { [optionIndex: number]: string };
   }>({});
   // State for WebSocket connection status
   const [isConnected, setIsConnected] = useState(false);
@@ -57,41 +57,67 @@ const PollsList: React.FC<PollsListProps> = ({
 
     // Listen for new polls from other users
     const handleNewPoll = (poll: any) => {
-      console.log('📊 New poll received:', poll);
-      
-      // Create mapping for this new poll's options
-      const optionMapping: { [optionIndex: number]: string } = {};
-      poll.options.forEach((opt: any, index: number) => {
-        optionMapping[index] = opt.id;
-      });
-      
-      // Update the mapping state
-      setPollOptionMapping(prev => ({
-        ...prev,
-        [poll.id]: optionMapping
-      }));
-      
+      console.log("📊 New poll received:", poll);
+
+      // Check if poll has options with IDs
+      if (poll.options && Array.isArray(poll.options)) {
+        // Create mapping for this new poll's options
+        const optionMapping: { [optionIndex: number]: string } = {};
+
+        // Log the structure to debug
+        console.log("Poll options structure:", JSON.stringify(poll.options));
+
+        poll.options.forEach((opt: any, index: number) => {
+          // Different backends might have different property names
+          const optionId = opt.id || opt._id || `${poll.id}-option-${index}`;
+          optionMapping[index] = optionId;
+          console.log(`Mapped option ${index} to ID ${optionId}`);
+        });
+
+        // Update the mapping state immediately
+        setPollOptionMapping((prev) => {
+          const newMapping = {
+            ...prev,
+            [poll.id]: optionMapping,
+          };
+          console.log("Updated option mappings:", newMapping);
+          return newMapping;
+        });
+      }
+
       // Remove from local polls if it exists and add to server polls
-      setLocalPolls(prev => prev.filter(p => p.question !== poll.question));
-      
-      // Request fresh polls list to get updated data
+      setLocalPolls((prev) => prev.filter((p) => p.question !== poll.question));
+
+      // Add to polls via parent component callback or update local state
+      // Since we don't have direct access to polls state, we'll trigger a refresh
       requestActivePolls();
     };
 
     // Listen for active polls list
     const handleActivePollsList = (pollsData: any[]) => {
-      console.log('📊 Active polls received:', pollsData);
-      
+      console.log("📊 Active polls received:", pollsData);
+
       // Store option ID mappings for voting
-      const newMappings: { [pollId: string]: { [optionIndex: number]: string } } = {};
-      
+      const newMappings: {
+        [pollId: string]: { [optionIndex: number]: string };
+      } = {};
+
       // Convert server polls format to component format
       const formattedPolls: Poll[] = pollsData.map((poll: any) => {
         // Create mapping for this poll's options
         const optionMapping: { [optionIndex: number]: string } = {};
-        poll.options.forEach((opt: any, index: number) => {
-          optionMapping[index] = opt.id;
-        });
+
+        if (poll.options && Array.isArray(poll.options)) {
+          poll.options.forEach((opt: any, index: number) => {
+            // Try to get the option ID from different possible property names
+            const optionId = opt.id || opt._id || `${poll.id}-option-${index}`;
+            optionMapping[index] = optionId;
+            console.log(
+              `Poll ${poll.id}: Mapped option ${index} to ID ${optionId}`
+            );
+          });
+        }
+
         newMappings[poll.id] = optionMapping;
 
         return {
@@ -100,39 +126,46 @@ const PollsList: React.FC<PollsListProps> = ({
           options: poll.options.map((opt: any) => ({
             text: opt.text,
             votes: opt.votes?.length || 0,
-            percentage: 0
+            percentage: 0,
           })),
-          totalVotes: poll.options.reduce((total: number, opt: any) => total + (opt.votes?.length || 0), 0),
-          timeLeft: poll.expiresAt ? calculateTimeLeft(poll.expiresAt) : "Expired"
+          totalVotes: poll.options.reduce(
+            (total: number, opt: any) => total + (opt.votes?.length || 0),
+            0
+          ),
+          timeLeft: poll.expiresAt
+            ? calculateTimeLeft(poll.expiresAt)
+            : "Expired",
         };
       });
 
       // Calculate percentages
-      formattedPolls.forEach(poll => {
-        poll.options.forEach(option => {
-          option.percentage = poll.totalVotes > 0 
-            ? Math.round((option.votes / poll.totalVotes) * 100) 
-            : 0;
+      formattedPolls.forEach((poll) => {
+        poll.options.forEach((option) => {
+          option.percentage =
+            poll.totalVotes > 0
+              ? Math.round((option.votes / poll.totalVotes) * 100)
+              : 0;
         });
       });
 
       // Update mappings and server polls state
-      setPollOptionMapping(prev => ({ ...prev, ...newMappings }));
+      console.log("📊 Updating option mappings with:", newMappings);
+      setPollOptionMapping((prev) => ({ ...prev, ...newMappings }));
       setServerPolls(formattedPolls);
     };
 
     // Listen for poll votes
     const handlePollVoteAdded = (voteData: any) => {
-      console.log('🗳️ Vote added:', voteData);
+      console.log("🗳️ Vote added:", voteData);
       // Refresh active polls to get updated vote counts
       requestActivePolls();
     };
 
     // Listen for vote confirmation
     const handleVoteConfirmed = (data: any) => {
-      console.log('✅ Vote confirmed:', data);
+      console.log("✅ Vote confirmed:", data);
       // Add poll to voted polls if not already there
-      setVotedPolls(prev => {
+      setVotedPolls((prev) => {
         if (!prev.includes(data.pollId)) {
           return [...prev, data.pollId];
         }
@@ -144,53 +177,53 @@ const PollsList: React.FC<PollsListProps> = ({
 
     // Listen for poll closure
     const handlePollClosed = (data: any) => {
-      console.log('📊 Poll closed:', data);
+      console.log("📊 Poll closed:", data);
       // Remove from active polls or mark as closed
       requestActivePolls();
     };
 
     // Listen for poll errors
     const handlePollError = (data: any) => {
-      console.error('❌ Poll error:', data.message);
+      console.error("❌ Poll error:", data.message);
       alert(data.message); // You might want to use a proper notification system
     };
 
     // Listen for connection status changes
     const handleConnect = () => {
-      console.log('🟢 Socket connected');
+      console.log("🟢 Socket connected");
       setIsConnected(true);
       // Request active polls when connected
       requestActivePolls();
     };
 
     const handleDisconnect = () => {
-      console.log('🔴 Socket disconnected');
+      console.log("🔴 Socket disconnected");
       setIsConnected(false);
     };
 
     // Add event listeners
-    socket.on('newPoll', handleNewPoll);
-    socket.on('activePollsList', handleActivePollsList);
-    socket.on('pollVoteAdded', handlePollVoteAdded);
-    socket.on('voteConfirmed', handleVoteConfirmed);
-    socket.on('pollClosed', handlePollClosed);
-    socket.on('pollError', handlePollError);
-    socket.on('connect', handleConnect);
-    socket.on('disconnect', handleDisconnect);
+    socket.on("newPoll", handleNewPoll);
+    socket.on("activePollsList", handleActivePollsList);
+    socket.on("pollVoteAdded", handlePollVoteAdded);
+    socket.on("voteConfirmed", handleVoteConfirmed);
+    socket.on("pollClosed", handlePollClosed);
+    socket.on("pollError", handlePollError);
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
 
     // Request active polls on mount
     requestActivePolls();
 
     // Cleanup listeners on unmount
     return () => {
-      socket.off('newPoll', handleNewPoll);
-      socket.off('activePollsList', handleActivePollsList);
-      socket.off('pollVoteAdded', handlePollVoteAdded);
-      socket.off('voteConfirmed', handleVoteConfirmed);
-      socket.off('pollClosed', handlePollClosed);
-      socket.off('pollError', handlePollError);
-      socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
+      socket.off("newPoll", handleNewPoll);
+      socket.off("activePollsList", handleActivePollsList);
+      socket.off("pollVoteAdded", handlePollVoteAdded);
+      socket.off("voteConfirmed", handleVoteConfirmed);
+      socket.off("pollClosed", handlePollClosed);
+      socket.off("pollError", handlePollError);
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
     };
   }, [socket, roomId]);
 
@@ -204,50 +237,53 @@ const PollsList: React.FC<PollsListProps> = ({
 
     const minutes = Math.floor(difference / (1000 * 60));
     const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-    
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
   // WebSocket function to request active polls
   const requestActivePolls = () => {
     if (socket && isConnected) {
-      console.log('📊 Requesting active polls for room:', roomId);
-      socket.emit('getActivePolls', { roomId });
+      console.log("📊 Requesting active polls for room:", roomId);
+      socket.emit("getActivePolls", { roomId });
     }
   };
 
   // WebSocket function to create a poll
-  const createPollViaSocket = (pollData: { question: string; options: string[] }) => {
+  const createPollViaSocket = (pollData: {
+    question: string;
+    options: string[];
+  }) => {
     if (!socket || !isConnected) {
-      console.error('❌ Socket not connected');
-      alert('Not connected to server. Please try again.');
+      console.error("❌ Socket not connected");
+      alert("Not connected to server. Please try again.");
       return;
     }
 
-    console.log('📊 Creating poll via socket:', pollData);
-    socket.emit('createPoll', {
+    console.log("📊 Creating poll via socket:", pollData);
+    socket.emit("createPoll", {
       roomId,
       userId,
       name: pollData.question, // Using question as name for now
       question: pollData.question,
-      options: pollData.options
+      options: pollData.options,
     });
   };
 
   // WebSocket function to vote on a poll
   const voteOnPollViaSocket = (pollId: string, optionId: string) => {
     if (!socket || !isConnected) {
-      console.error('❌ Socket not connected');
-      alert('Not connected to server. Please try again.');
+      console.error("❌ Socket not connected");
+      alert("Not connected to server. Please try again.");
       return;
     }
 
-    console.log('🗳️ Voting via socket:', { pollId, optionId });
-    socket.emit('votePoll', {
+    console.log("🗳️ Voting via socket:", { pollId, optionId });
+    socket.emit("votePoll", {
       roomId,
       pollId,
       optionId,
-      userId
+      userId,
     });
   };
 
@@ -309,17 +345,17 @@ const PollsList: React.FC<PollsListProps> = ({
     if (socket && isConnected) {
       createPollViaSocket({
         question: pollTitle.trim(),
-        options: filteredOptions
+        options: filteredOptions,
       });
     } else {
       // Fallback to local creation if socket not available
       const tempPoll: Poll = {
         id: `temp-${Date.now()}`,
         question: pollTitle,
-        options: filteredOptions.map(text => ({ 
-          text, 
-          votes: 0, 
-          percentage: 0 
+        options: filteredOptions.map((text) => ({
+          text,
+          votes: 0,
+          percentage: 0,
         })),
         totalVotes: 0,
         timeLeft: "2:00",
@@ -330,7 +366,7 @@ const PollsList: React.FC<PollsListProps> = ({
       if (onCreatePoll) {
         onCreatePoll({
           question: pollTitle,
-          options: filteredOptions.map(text => ({ text })),
+          options: filteredOptions.map((text) => ({ text })),
         });
       }
     }
@@ -414,36 +450,49 @@ const PollsList: React.FC<PollsListProps> = ({
     } else {
       // Handle server poll voting via WebSocket using mapping
       const optionMapping = pollOptionMapping[pollId];
-      
-      console.log('🗳️ Debug vote attempt:', { 
-        pollId, 
-        optionIndex, 
+
+      console.log("🗳️ Debug vote attempt:", {
+        pollId,
+        optionIndex,
         hasMapping: !!optionMapping,
         mapping: optionMapping,
-        allMappings: pollOptionMapping 
+        allMappings: pollOptionMapping,
       });
-      
+
       if (optionMapping && optionMapping[optionIndex]) {
         const optionId = optionMapping[optionIndex];
-        console.log('🗳️ Voting on server poll:', { 
-          pollId, 
-          optionIndex, 
-          optionId 
+        console.log("🗳️ Voting on server poll:", {
+          pollId,
+          optionIndex,
+          optionId,
         });
-        
+
         voteOnPollViaSocket(pollId, optionId);
       } else {
-        console.error('❌ No option mapping found for poll:', { 
-          pollId, 
+        console.warn("⚠️ No option mapping found for poll, using fallback:", {
+          pollId,
           optionIndex,
-          availableMappings: Object.keys(pollOptionMapping),
-          requestedMapping: optionMapping
         });
-        
-        // Fallback: try to request polls again to rebuild mappings
-        console.log('🔄 Requesting fresh polls to rebuild mappings...');
+
+        // Create a fallback option ID
+        const fallbackOptionId = `${pollId}-option-${optionIndex}`;
+        console.log("⚠️ Using fallback option ID:", fallbackOptionId);
+
+        // Update mappings for future use
+        setPollOptionMapping((prev) => ({
+          ...prev,
+          [pollId]: {
+            ...(prev[pollId] || {}),
+            [optionIndex]: fallbackOptionId,
+          },
+        }));
+
+        // Try to vote with the fallback ID
+        voteOnPollViaSocket(pollId, fallbackOptionId);
+
+        // Also request polls again to rebuild mappings for next time
+        console.log("🔄 Requesting fresh polls to rebuild mappings...");
         requestActivePolls();
-        return;
       }
 
       // Also call the original onVote handler if provided
@@ -456,23 +505,25 @@ const PollsList: React.FC<PollsListProps> = ({
     // Filter out local polls that might have already been added from the server
     // based on question text matching
     const filteredLocalPolls = localPolls.filter(
-      (localPoll) => !serverPolls.some((serverPoll) => serverPoll.question === localPoll.question) &&
-                    !polls.some((poll) => poll.question === localPoll.question)
+      (localPoll) =>
+        !serverPolls.some(
+          (serverPoll) => serverPoll.question === localPoll.question
+        ) && !polls.some((poll) => poll.question === localPoll.question)
     );
 
     // For parent props polls that might be server polls without mappings, try to create mappings
-    polls.forEach(poll => {
+    polls.forEach((poll) => {
       if (!pollOptionMapping[poll.id]) {
-        console.log('📊 Creating fallback mapping for parent poll:', poll.id);
+        console.log("📊 Creating fallback mapping for parent poll:", poll.id);
         // This is a fallback - we'll generate option IDs based on text hash or index
         const optionMapping: { [optionIndex: number]: string } = {};
         poll.options.forEach((opt, index) => {
           // Use a simple hash of the option text as ID (fallback)
           optionMapping[index] = `option-${poll.id}-${index}`;
         });
-        setPollOptionMapping(prev => ({
+        setPollOptionMapping((prev) => ({
           ...prev,
-          [poll.id]: optionMapping
+          [poll.id]: optionMapping,
         }));
       }
     });
@@ -490,12 +541,14 @@ const PollsList: React.FC<PollsListProps> = ({
     <div className="space-y-4 sm:space-y-6 pb-4 sm:pb-0">
       {/* Connection status indicator */}
       {socket && (
-        <div className={`text-xs px-2 py-1 rounded ${
-          isConnected 
-            ? 'bg-green-100 text-green-800' 
-            : 'bg-red-100 text-red-800'
-        }`}>
-          {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+        <div
+          className={`text-xs px-2 py-1 rounded ${
+            isConnected
+              ? "bg-green-100 text-green-800"
+              : "bg-red-100 text-red-800"
+          }`}
+        >
+          {isConnected ? "🟢 Connected" : "🔴 Disconnected"}
         </div>
       )}
 
@@ -511,7 +564,7 @@ const PollsList: React.FC<PollsListProps> = ({
           >
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900">
-                Create Live Poll {socket && !isConnected && '(Offline Mode)'}
+                Create Live Poll {socket && !isConnected && "(Offline Mode)"}
               </h3>
               <button
                 onClick={() => setShowModal(false)}
@@ -598,8 +651,8 @@ const PollsList: React.FC<PollsListProps> = ({
                 disabled={socket && !isConnected}
                 className={`px-4 py-2 rounded-md text-white ${
                   socket && !isConnected
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-purple-600 hover:bg-purple-700'
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-purple-600 hover:bg-purple-700"
                 }`}
               >
                 Create Poll
@@ -641,10 +694,13 @@ const PollsList: React.FC<PollsListProps> = ({
           {(localPolls.length > 0 || serverPolls.length > 0) && (
             <div className="mb-3 text-sm text-purple-700 bg-purple-50 p-2 rounded">
               <span>
-                {localPolls.length > 0 && `You have ${localPolls.length} new poll(s) waiting to be synchronized`}
-                {localPolls.length > 0 && serverPolls.length > 0 && ' • '}
-                {serverPolls.length > 0 && `${serverPolls.length} active server poll(s)`}
-                {votedPolls.length > 0 && ` • You can change your vote by selecting a different option`}
+                {localPolls.length > 0 &&
+                  `You have ${localPolls.length} new poll(s) waiting to be synchronized`}
+                {localPolls.length > 0 && serverPolls.length > 0 && " • "}
+                {serverPolls.length > 0 &&
+                  `${serverPolls.length} active server poll(s)`}
+                {votedPolls.length > 0 &&
+                  ` • You can change your vote by selecting a different option`}
               </span>
             </div>
           )}
