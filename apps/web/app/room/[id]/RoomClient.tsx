@@ -302,7 +302,7 @@ const RoomClient = () => {
       return;
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-pro:generateContent?key=${APIKEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${APIKEY}`;
 
     // Set loading state
     setIsLoading(true);
