@@ -462,7 +462,7 @@ const RoomClient = () => {
     const token = localStorage.getItem("auth_token");
 
     try {
-      await fetch(`https://veil-1qpe.onrender.com/polls/${pollId}/vote`, {
+      await fetch(`https://veil-1qpe.onrender.com/polls/${roomId}/vote`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
