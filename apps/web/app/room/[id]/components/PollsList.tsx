@@ -195,18 +195,16 @@ const PollsList: React.FC<PollsListProps> = ({
       if (data.message.includes("not found")) {
         // The poll or option wasn't found - this might be a timing issue
         console.log(
-          "⚠️ This appears to be a timing issue. Refreshing polls..."
+          "⚠️ This appears to be a server-side issue with option handling"
         );
 
         // Delay the refresh slightly to give the server time to complete any pending operations
         setTimeout(() => {
           requestActivePolls();
-        }, 500);
+        }, 1000);
 
-        // Provide a more helpful message to the user
-        alert(
-          "Your vote is being processed. Please try again in a moment if needed."
-        );
+        // Don't show an alert for this common error
+        // It seems to happen after votes are actually recorded
       } else {
         // For other errors, show the original message
         alert(`Error: ${data.message}`);
@@ -295,6 +293,11 @@ const PollsList: React.FC<PollsListProps> = ({
     });
   };
 
+  // State to track votes in progress to prevent duplicate votes
+  const [votesInProgress, setVotesInProgress] = useState<{
+    [key: string]: boolean;
+  }>({});
+
   // WebSocket function to vote on a poll with retry logic
   const voteOnPollViaSocket = (pollId: string, optionId: string) => {
     if (!socket || !isConnected) {
@@ -302,6 +305,18 @@ const PollsList: React.FC<PollsListProps> = ({
       alert("Not connected to server. Please try again.");
       return;
     }
+
+    // Check if we're already voting on this poll
+    const voteKey = `${pollId}-${optionId}`;
+    if (votesInProgress[voteKey]) {
+      console.log(
+        "⚠️ Vote already in progress for this option, skipping duplicate"
+      );
+      return;
+    }
+
+    // Mark this vote as in progress
+    setVotesInProgress((prev) => ({ ...prev, [voteKey]: true }));
 
     console.log("🗳️ Voting via socket:", { pollId, optionId });
 
@@ -313,10 +328,17 @@ const PollsList: React.FC<PollsListProps> = ({
         optionId,
         userId,
       });
-    }, 300); // 300ms delay
-  };
 
-  // Close modal when clicking outside
+      // Clear the in-progress flag after a timeout
+      setTimeout(() => {
+        setVotesInProgress((prev) => {
+          const updated = { ...prev };
+          delete updated[voteKey];
+          return updated;
+        });
+      }, 5000); // Allow 5 seconds before enabling re-voting
+    }, 300); // 300ms delay before sending vote
+  }; // Close modal when clicking outside
   const handleClickOutside = (e: React.MouseEvent) => {
     if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
       setShowModal(false);
@@ -814,13 +836,18 @@ const PollsList: React.FC<PollsListProps> = ({
                     <div key={index}>
                       <button
                         onClick={() => handleLocalVote(poll.id, index)}
+                        disabled={
+                          votesInProgress[
+                            `${poll.id}-${pollOptionMapping?.[poll.id]?.[index] || `${poll.id}-option-${index}`}`
+                          ]
+                        }
                         className={`w-full text-left border p-2 sm:p-3 rounded transition-colors ${
                           isSelected
                             ? "bg-purple-50 border-purple-300"
                             : hasVoted
                               ? "bg-gray-50 hover:bg-gray-100"
                               : "hover:bg-gray-100"
-                        }`}
+                        } ${votesInProgress[`${poll.id}-${pollOptionMapping?.[poll.id]?.[index] || `${poll.id}-option-${index}`}`] ? "opacity-70 cursor-not-allowed" : ""}`}
                       >
                         <div className="flex justify-between text-xs sm:text-sm mb-1">
                           <span
@@ -832,6 +859,13 @@ const PollsList: React.FC<PollsListProps> = ({
                             {isSelected && (
                               <span className="ml-2 text-purple-600 text-xs">
                                 (Selected)
+                              </span>
+                            )}
+                            {votesInProgress[
+                              `${poll.id}-${pollOptionMapping?.[poll.id]?.[index] || `${poll.id}-option-${index}`}`
+                            ] && (
+                              <span className="ml-2 text-gray-500 text-xs">
+                                (Voting...)
                               </span>
                             )}
                           </span>
