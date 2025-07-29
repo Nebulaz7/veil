@@ -58,18 +58,18 @@ const PollsList: React.FC<PollsListProps> = ({
     // Listen for new polls from other users
     const handleNewPoll = (poll: any) => {
       console.log('📊 New poll received:', poll);
-      
-      // Create mapping for this new poll's options
-      const optionMapping: { [optionIndex: number]: string } = {};
-      poll.options.forEach((opt: any, index: number) => {
-        optionMapping[index] = opt.id;
-      });
-      
-      // Update the mapping state
-      setPollOptionMapping(prev => ({
-        ...prev,
-        [poll.id]: optionMapping
-      }));
+      // Convert server poll format to component format
+      const formattedPoll: Poll = {
+        id: poll.id,
+        question: poll.question,
+        options: poll.options.map((opt: any) => ({
+          text: opt.text,
+          votes: opt.votes?.length || 0,
+          percentage: 0
+        })),
+        totalVotes: 0,
+        timeLeft: poll.expiresAt ? calculateTimeLeft(poll.expiresAt) : "2:00"
+      };
       
       // Remove from local polls if it exists and add to server polls
       setLocalPolls(prev => prev.filter(p => p.question !== poll.question));
@@ -414,15 +414,6 @@ const PollsList: React.FC<PollsListProps> = ({
     } else {
       // Handle server poll voting via WebSocket using mapping
       const optionMapping = pollOptionMapping[pollId];
-      
-      console.log('🗳️ Debug vote attempt:', { 
-        pollId, 
-        optionIndex, 
-        hasMapping: !!optionMapping,
-        mapping: optionMapping,
-        allMappings: pollOptionMapping 
-      });
-      
       if (optionMapping && optionMapping[optionIndex]) {
         const optionId = optionMapping[optionIndex];
         console.log('🗳️ Voting on server poll:', { 
@@ -433,16 +424,7 @@ const PollsList: React.FC<PollsListProps> = ({
         
         voteOnPollViaSocket(pollId, optionId);
       } else {
-        console.error('❌ No option mapping found for poll:', { 
-          pollId, 
-          optionIndex,
-          availableMappings: Object.keys(pollOptionMapping),
-          requestedMapping: optionMapping
-        });
-        
-        // Fallback: try to request polls again to rebuild mappings
-        console.log('🔄 Requesting fresh polls to rebuild mappings...');
-        requestActivePolls();
+        console.error('❌ No option mapping found for poll:', { pollId, optionIndex });
         return;
       }
 
@@ -460,26 +442,9 @@ const PollsList: React.FC<PollsListProps> = ({
                     !polls.some((poll) => poll.question === localPoll.question)
     );
 
-    // For parent props polls that might be server polls without mappings, try to create mappings
-    polls.forEach(poll => {
-      if (!pollOptionMapping[poll.id]) {
-        console.log('📊 Creating fallback mapping for parent poll:', poll.id);
-        // This is a fallback - we'll generate option IDs based on text hash or index
-        const optionMapping: { [optionIndex: number]: string } = {};
-        poll.options.forEach((opt, index) => {
-          // Use a simple hash of the option text as ID (fallback)
-          optionMapping[index] = `option-${poll.id}-${index}`;
-        });
-        setPollOptionMapping(prev => ({
-          ...prev,
-          [poll.id]: optionMapping
-        }));
-      }
-    });
-
     // Combine all polls: server polls first, then local polls, then parent polls
     return [...serverPolls, ...filteredLocalPolls, ...polls];
-  }, [serverPolls, localPolls, polls, pollOptionMapping]);
+  }, [serverPolls, localPolls, polls]);
 
   // For debugging
   React.useEffect(() => {
