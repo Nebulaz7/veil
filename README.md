@@ -1,135 +1,137 @@
-# Turborepo starter
+# Veil
 
-This Turborepo starter is maintained by the Turborepo core team.
+Veil is a real-time anonymous Q&A platform designed for events, livestreams, and interactive sessions. It empowers audiences to ask questions without revealing their identity, and gives moderators full control to filter, highlight, and respond — all in a sleek, live-updating interface.
 
-## Using this example
+## ✨ Features
 
-Run the following command:
+- **Anonymous Q&A** – Attendees can ask questions without logging in
+- **Live WebSocket Updates** – See questions in real time without refresh
+- **Moderator Dashboard** – View, filter, answer, and hide questions
+- **Audience Upvoting** – Surface popular questions via likes
+- **Poll Creation** – Run simple polls to gather quick feedback
+- **Room Codes** – Easily join sessions using a 6-character code
+- **Session Management** – Organize and revisit rooms per event
 
-```sh
-npx create-turbo@latest
+## 🛠️ Tech Stack
+
+| Layer          | Tech                          |
+|----------------|-------------------------------|
+| Frontend       | Next.js 14, TailwindCSS, Shadcn UI, Lucide Icons |
+| Backend        | NestJS (WebSocket + REST API) |
+| Database       | Prisma + PostgreSQL           |
+| Authentication | Passport.js                   |
+| Infra          | Render (API), Vercel (Frontend) |
+| Realtime       | WebSockets (via socket.io)    |
+| Other          | TypeScript, Turbo Monorepo, ESM Modules |
+
+## 🚀 Getting Started
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/cridiv/Veil.git
+cd Veil
 ```
 
-## What's inside?
-
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+### 2. Install Dependencies
+```bash
+pnpm install
 ```
 
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
+### 3. Set Up Environment Variables
+Create a `.env` file in the root and include:
+```env
+# Database
+DATABASE_URL=postgresql://username:password@localhost:5432/veil_db
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+# Authentication
+JWT_SECRET=your-jwt-secret-key
+SESSION_SECRET=your-session-secret-key
 
-### Develop
+# OAuth (if using social login)
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
 
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
+# App Configuration
+NODE_ENV=development
+PORT=5000
+FRONTEND_URL=http://localhost:3000
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+**Note:** Be sure to also add these in Vercel and Render during deployment.
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
+### 4. Database Setup
+Set up your PostgreSQL database and run migrations:
+```bash
+cd apps/api
+pnpm run db:migrate
+pnpm run db:seed  # Optional: seed with sample data
 ```
 
-### Remote Caching
+### 5. Run the App Locally
+Run both backend and frontend in separate terminals:
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
+**Backend (NestJS)**
+```bash
+cd apps/api
+pnpm run start:dev
 ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
+**Frontend (Next.js)**
+```bash
+cd apps/web
+pnpm dev
 ```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
+## 🌐 Deployment
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
+### 📡 Backend (Render)
+1. Connect repo on Render
+2. Set root directory to `apps/api`
+3. Add environment variables
+4. Build command:
+```bash
+pnpm install && pnpm run build
+```
+5. Start command:
+```bash
+pnpm run start:prod
 ```
 
-## Useful Links
+### 🌍 Frontend (Vercel)
+1. Connect repo on Vercel
+2. Set root directory to `apps/web`
+3. Add all environment variables
+4. Deploy
 
-Learn more about the power of Turborepo:
+## 🔐 Authentication
 
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+Veil uses Passport.js for flexible authentication strategies:
+
+- **Local Strategy** – Username/password authentication for moderators
+- **JWT Tokens** – Secure session management
+- **Anonymous Access** – No authentication required for audience participation
+- **OAuth Support** – Google, GitHub, and other providers (optional)
+
+## 🤝 Contributing
+
+We welcome all contributions!
+
+1. Fork the repo
+2. Create a branch: `git checkout -b feat/your-feature-name`
+3. Make changes and commit: `git commit -m "feat: your feature"`
+4. Push the branch: `git push origin feat/your-feature-name`
+5. Open a pull request 🎉
+
+## 👨‍💻 Authors
+
+* **Aderemi Ademola** – Backend Lead, Realtime Systems (X: [@crid_iv](https://x.com/Crid_IV))
+* **Peters Joshua** – Frontend Lead, UX Engineer (X: [@joshpet77](https://x.com/joshpet77))
+* **Oyedapo Kayode** – Product Designer (X: [@Kayode_96](https://x.com/Kayode_96))
+
+## 📜 License
+
+This project is licensed under the **MIT License**.
+
+---
+
+Built to make questions speak louder than names. 🫶
