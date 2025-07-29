@@ -72,6 +72,25 @@ const PollsList: React.FC<PollsListProps> = ({
           const optionId = opt.id || opt._id || `${poll.id}-option-${index}`;
           optionMapping[index] = optionId;
           console.log(`Mapped option ${index} to ID ${optionId}`);
+
+          // Check if current user has voted for this option in the new poll
+          if (opt.votes && Array.isArray(opt.votes)) {
+            const userVoted = opt.votes.some(
+              (vote: any) => vote.voterId === userId || vote.userId === userId
+            );
+            if (userVoted) {
+              setUserVoteChoices((prev) => ({ ...prev, [poll.id]: index }));
+              setVotedPolls((prev) => {
+                if (!prev.includes(poll.id)) {
+                  return [...prev, poll.id];
+                }
+                return prev;
+              });
+              console.log(
+                `User ${userId} voted for option ${index} in new poll ${poll.id}`
+              );
+            }
+          }
         });
 
         // Update the mapping state immediately
@@ -102,6 +121,9 @@ const PollsList: React.FC<PollsListProps> = ({
         [pollId: string]: { [optionIndex: number]: string };
       } = {};
 
+      // Track user vote choices from server data
+      const newUserVoteChoices: { [pollId: string]: number } = {};
+
       // Convert server polls format to component format
       const formattedPolls: Poll[] = pollsData.map((poll: any) => {
         // Create mapping for this poll's options
@@ -115,6 +137,19 @@ const PollsList: React.FC<PollsListProps> = ({
             console.log(
               `Poll ${poll.id}: Mapped option ${index} to ID ${optionId}`
             );
+
+            // Check if current user has voted for this option
+            if (opt.votes && Array.isArray(opt.votes)) {
+              const userVoted = opt.votes.some(
+                (vote: any) => vote.voterId === userId || vote.userId === userId
+              );
+              if (userVoted) {
+                newUserVoteChoices[poll.id] = index;
+                console.log(
+                  `User ${userId} voted for option ${index} in poll ${poll.id}`
+                );
+              }
+            }
           });
         }
 
@@ -148,10 +183,21 @@ const PollsList: React.FC<PollsListProps> = ({
         });
       });
 
-      // Update mappings and server polls state
+      // Update mappings, server polls state, and user vote choices from server data
       console.log("📊 Updating option mappings with:", newMappings);
+      console.log("📊 Updating user vote choices with:", newUserVoteChoices);
       setPollOptionMapping((prev) => ({ ...prev, ...newMappings }));
       setServerPolls(formattedPolls);
+
+      // Update user vote choices based on server data
+      setUserVoteChoices((prev) => ({ ...prev, ...newUserVoteChoices }));
+
+      // Update voted polls list
+      const votedPollIds = Object.keys(newUserVoteChoices);
+      setVotedPolls((prev) => {
+        const updated = [...new Set([...prev, ...votedPollIds])];
+        return updated;
+      });
     };
 
     // Listen for poll votes
@@ -172,6 +218,23 @@ const PollsList: React.FC<PollsListProps> = ({
         }
         return prev;
       });
+
+      // Find which option index corresponds to the confirmed optionId
+      const pollMapping = pollOptionMapping[data.pollId];
+      if (pollMapping) {
+        const optionIndex = Object.keys(pollMapping).find(
+          (index) => pollMapping[parseInt(index)] === data.optionId
+        );
+        if (optionIndex !== undefined) {
+          setUserVoteChoices((prev) => ({
+            ...prev,
+            [data.pollId]: parseInt(optionIndex),
+          }));
+          console.log(
+            `Updated user choice for poll ${data.pollId} to option ${optionIndex}`
+          );
+        }
+      }
 
       // Delay the polls refresh slightly to ensure the server has processed the vote
       setTimeout(() => {
@@ -440,16 +503,7 @@ const PollsList: React.FC<PollsListProps> = ({
   // Add a new state to track which specific option each user voted for
   const [userVoteChoices, setUserVoteChoices] = useState<{
     [pollId: string]: number; // stores the option index the user voted for
-  }>({
-    // Initialize with any existing voted polls
-    ...votedPolls.reduce(
-      (acc, pollId) => {
-        acc[pollId] = 0; // Default to first option, will be updated on vote
-        return acc;
-      },
-      {} as { [pollId: string]: number }
-    ),
-  });
+  }>({});
 
   // Updated vote handler - using option mapping for server polls
   const handleLocalVote = (pollId: string, optionIndex: number) => {
@@ -540,52 +594,11 @@ const PollsList: React.FC<PollsListProps> = ({
           return prev;
         });
 
-        // For both local and server polls, track the user's choice
+        // For both local and server polls, track the user's choice optimistically
         setUserVoteChoices((prev) => ({
           ...prev,
           [pollId]: optionIndex,
         }));
-
-        // Show temporary visual feedback
-        const pollToUpdate = serverPolls.find((p) => p.id === pollId);
-        if (pollToUpdate) {
-          // Create a temporary update of the poll with the new vote
-          const tempUpdatedPolls = serverPolls.map((poll) => {
-            if (poll.id === pollId) {
-              // Clone the options array
-              const newOptions = [...poll.options];
-              // Update the selected option
-              if (newOptions[optionIndex]) {
-                newOptions[optionIndex] = {
-                  ...newOptions[optionIndex],
-                  votes: newOptions[optionIndex].votes + 1,
-                };
-
-                // Update total votes
-                const newTotalVotes = poll.totalVotes + 1;
-
-                // Recalculate percentages
-                const updatedOptions = newOptions.map((opt) => ({
-                  ...opt,
-                  percentage:
-                    newTotalVotes > 0
-                      ? Math.round((opt.votes / newTotalVotes) * 100)
-                      : 0,
-                }));
-
-                return {
-                  ...poll,
-                  options: updatedOptions,
-                  totalVotes: newTotalVotes,
-                };
-              }
-            }
-            return poll;
-          });
-
-          // Update the state with our temporary changes
-          setServerPolls(tempUpdatedPolls);
-        }
 
         // Send the vote to the server
         voteOnPollViaSocket(pollId, optionId);
