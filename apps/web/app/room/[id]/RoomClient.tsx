@@ -534,31 +534,32 @@ const RoomClient = () => {
   };
 
   const handleSubmitQuestion = () => {
-    if (
-      !newQuestion.trim() ||
-      !roomId ||
-      isRoomLoading ||
-      rateLimitRemaining > 0
-    ) {
-      if (rateLimitRemaining > 0) {
-        console.warn("Rate limited - please wait");
-      } else {
-        console.warn("Missing question or roomId");
-      }
-      return;
+  if (
+    !newQuestion.trim() ||
+    !roomId ||
+    isRoomLoading ||
+    rateLimitRemaining > 0
+  ) {
+    if (rateLimitRemaining > 0) {
+      console.warn("Rate limited - please wait");
+    } else {
+      console.warn("Missing question or roomId");
     }
+    return;
+  }
 
-    const userId = localStorage.getItem("temp_userId");
-    const username = localStorage.getItem("temp_username");
+  const userId = localStorage.getItem("temp_userId");
+  const username = localStorage.getItem("temp_username");
 
-    socket.emit("askQuestion", {
-      roomId,
-      userId: userId ?? "anonymous",
-      question: newQuestion,
-    });
+  socket.emit("askQuestion", {
+    roomId,
+    userId: userId ?? "anonymous",
+    username: username ?? "Anonymous",
+    question: newQuestion,
+  });
 
-    setNewQuestion("");
-  };
+  setNewQuestion("");
+};
 
   const handleLike = (questionId: string) => {
     if (!socket) return;
