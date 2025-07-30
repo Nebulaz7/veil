@@ -6,7 +6,6 @@ import QuestionItem from "./QuestionItem";
 interface QuestionsListProps {
   questions: Question[];
   userId: string;
-  username: string; // Add this line
   expandedQuestions: Set<string>;
   replyInputs: Record<string, string>;
   isSubmittingReply: Record<string, boolean>;
@@ -21,7 +20,6 @@ interface QuestionsListProps {
 const QuestionsList: React.FC<QuestionsListProps> = ({
   questions,
   userId,
-  username, // Add this line
   expandedQuestions,
   replyInputs,
   isSubmittingReply,
@@ -54,7 +52,6 @@ const QuestionsList: React.FC<QuestionsListProps> = ({
             key={question.id}
             question={question}
             userId={userId}
-            username={username} // Add this line
             expandedQuestions={expandedQuestions}
             replyInputs={replyInputs}
             isSubmittingReply={isSubmittingReply}
