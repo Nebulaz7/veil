@@ -77,12 +77,14 @@ const DashboardNav = () => {
                   />
                 )}
               </div>
-              <ChevronDown
-                tabIndex={0}
-                role="button"
-                size={16}
-                className="text-gray-600"
-              />
+              <div className="flex flex-col items-start">
+                <ChevronDown
+                  tabIndex={0}
+                  role="button"
+                  size={16}
+                  className="text-gray-600"
+                />
+              </div>
             </div>
             <ul
               tabIndex={0}
