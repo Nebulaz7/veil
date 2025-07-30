@@ -630,6 +630,7 @@ const RoomClient = () => {
             <QuestionsList
               questions={questions}
               userId={userId}
+              username={username}
               expandedQuestions={expandedQuestions}
               replyInputs={replyInputs}
               isSubmittingReply={isSubmittingReply}
