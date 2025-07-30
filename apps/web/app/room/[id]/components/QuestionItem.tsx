@@ -6,6 +6,7 @@ import ReplySection from "./ReplySection";
 interface QuestionItemProps {
   question: Question;
   userId: string;
+  username: string;
   expandedQuestions: Set<string>;
   replyInputs: Record<string, string>;
   isSubmittingReply: Record<string, boolean>;
@@ -20,6 +21,7 @@ interface QuestionItemProps {
 const QuestionItem: React.FC<QuestionItemProps> = ({
   question,
   userId,
+  username,
   expandedQuestions,
   replyInputs,
   isSubmittingReply,
@@ -70,7 +72,7 @@ const QuestionItem: React.FC<QuestionItemProps> = ({
       <div className="flex justify-between items-start mb-2">
         <div className="flex items-center space-x-2 flex-1 min-w-0">
           <span className="font-medium text-sm sm:text-base truncate">
-            {question.user}
+            {question.username}
           </span>
           <div className="text-xs sm:text-sm text-gray-500 flex items-center space-x-1">
             <Clock className="w-2 h-2 sm:w-3 sm:h-3 flex-shrink-0" />
