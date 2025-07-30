@@ -50,14 +50,14 @@ const DashboardNav = () => {
             Veil
           </Link>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           {/* <input
             type="text"
             placeholder="Search"
             className="input border-[2px] border-gray-500 rounded-full input-bordered w-24 md:w-auto"
           /> */}
           <div className="dropdown dropdown-end">
-            <div className="btn btn-ghost btn-circle avatar flex items-center gap-1">
+            <div className="btn btn-ghost btn-circle avatar flex items-center gap-2">
               <div className="w-24 rounded-full">
                 {avatarError ? (
                   <div className="w-24 h-24 rounded-full bg-purple-600 flex items-center justify-center text-white text-2xl font-semibold">
@@ -78,7 +78,7 @@ const DashboardNav = () => {
                 )}
               </div>
             </div>
-            <div className="flex flex-col items-start">
+            <div className="flex gap-1">
               <ChevronDown
                 tabIndex={0}
                 role="button"
