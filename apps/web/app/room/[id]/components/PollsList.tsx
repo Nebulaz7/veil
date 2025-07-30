@@ -44,8 +44,7 @@ const PollsList: React.FC<PollsListProps> = ({
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [errors, setErrors] = useState<FormErrors>({});
 
-  // Poll state - single source of truth
-  const [serverPolls, setServerPolls] = useState<Poll[]>([]);
+  // Poll state - simplified to only handle what parent doesn't
   const [userVotes, setUserVotes] = useState<UserVotes>({});
   const [pollOptionMapping, setPollOptionMapping] = useState<PollOptionMapping>({});
 
@@ -86,10 +85,7 @@ const PollsList: React.FC<PollsListProps> = ({
     });
 
     // Fallback timeout to reset creating state
-    const timeout = setTimeout(() => setIsCreatingPoll(false), 5000);
-    
-    // Clear timeout if component unmounts
-    return () => clearTimeout(timeout);
+    setTimeout(() => setIsCreatingPoll(false), 5000);
   }, [socket, isCreatingPoll, roomId, userId]);
 
   const voteOnPollViaSocket = useCallback((pollId: string, optionId: string) => {
@@ -107,84 +103,47 @@ const PollsList: React.FC<PollsListProps> = ({
     });
   }, [socket, roomId, userId]);
 
-  // Process poll data utility
-  const processPollData = useCallback((pollData: any[]): {
-    formattedPolls: Poll[];
+  // Process poll data from parent
+  const processPollData = useCallback((pollData: Poll[]): {
     newMappings: PollOptionMapping;
     newUserVotes: UserVotes;
   } => {
     const newMappings: PollOptionMapping = {};
     const newUserVotes: UserVotes = {};
     
-    const formattedPolls: Poll[] = pollData.map((poll) => {
+    // Since we're getting simplified Poll[] from parent, we need to reconstruct mappings
+    pollData.forEach((poll) => {
       const optionMapping: { [optionIndex: number]: string } = {};
       
-      poll.options.forEach((opt: any, index: number) => {
-        optionMapping[index] = opt.id;
-        
-        if (opt.votes?.includes(userId)) {
-          newUserVotes[poll.id] = opt.id;
-        }
+      poll.options.forEach((opt, index) => {
+        // Generate consistent option IDs since parent doesn't provide them
+        const optionId = `${poll.id}-option-${index}`;
+        optionMapping[index] = optionId;
       });
       
       newMappings[poll.id] = optionMapping;
-      const totalVotes = poll.options.reduce((total: number, opt: any) => 
-        total + (opt.votes?.length || 0), 0
-      );
-
-      return {
-        id: poll.id,
-        question: poll.question,
-        options: poll.options.map((opt: any) => ({
-          text: opt.text,
-          votes: opt.votes?.length || 0,
-          percentage: totalVotes > 0 
-            ? Math.round(((opt.votes?.length || 0) / totalVotes) * 100) 
-            : 0
-        })),
-        totalVotes,
-        timeLeft: poll.expiresAt ? calculateTimeLeft(poll.expiresAt) : "Expired"
-      };
     });
 
-    return { formattedPolls, newMappings, newUserVotes };
-  }, [userId, calculateTimeLeft]);
+    return { newMappings, newUserVotes };
+  }, []);
 
-  // WebSocket event handlers
-  const handleNewPoll = useCallback((poll: any) => {
-    console.log('📊 New poll received:', poll.id);
-    setIsCreatingPoll(false);
-    
-    const { formattedPolls, newMappings, newUserVotes } = processPollData([poll]);
-    const [formattedPoll] = formattedPolls;
-    
-    setPollOptionMapping(prev => ({ ...prev, ...newMappings }));
-    setUserVotes(prev => ({ ...prev, ...newUserVotes }));
-    setServerPolls(prev => {
-      const filtered = prev.filter(p => p.id !== poll.id);
-      return [formattedPoll, ...filtered].filter(Boolean) as Poll[];
-    });
-  }, [processPollData]);
+  // Update mappings when polls change
+  useEffect(() => {
+    if (polls.length > 0) {
+      const { newMappings } = processPollData(polls);
+      setPollOptionMapping(newMappings);
+    }
+  }, [polls, processPollData]);
 
-  const handleActivePollsList = useCallback((pollsData: any[]) => {
-    console.log('📊 Active polls received:', pollsData.length, 'polls');
-    
-    const { formattedPolls, newMappings, newUserVotes } = processPollData(pollsData);
-    
-    // Single batch state update
-    setPollOptionMapping(newMappings);
-    setUserVotes(newUserVotes);
-    setServerPolls(formattedPolls);
-  }, [processPollData]);
-
+  // Simplified WebSocket event handlers - only handle events parent doesn't
   const handleVoteConfirmed = useCallback((data: any) => {
     console.log('✅ Vote confirmed:', data);
     setUserVotes(prev => ({ ...prev, [data.pollId]: data.optionId }));
   }, []);
 
-  const handlePollClosed = useCallback((data: any) => {
-    console.log('📊 Poll closed:', data);
-    setServerPolls(prev => prev.filter(poll => poll.id !== data.pollId));
+  const handleNewPoll = useCallback(() => {
+    console.log('📊 New poll received - resetting creation state');
+    setIsCreatingPoll(false);
   }, []);
 
   const handleConnect = useCallback(() => {
@@ -197,42 +156,36 @@ const PollsList: React.FC<PollsListProps> = ({
     setIsConnected(false);
   }, []);
 
-  // WebSocket setup effect
+  // Simplified WebSocket setup - only handle events not handled by parent
   useEffect(() => {
     if (!socket) return;
 
     let isMounted = true;
-    const eventHandlers = {
-      newPoll: (poll: any) => isMounted && handleNewPoll(poll),
-      activePollsList: (pollsData: any[]) => isMounted && handleActivePollsList(pollsData),
-      voteConfirmed: (data: any) => isMounted && handleVoteConfirmed(data),
-      pollClosed: (data: any) => isMounted && handlePollClosed(data),
-      connect: () => isMounted && handleConnect(),
-      disconnect: () => isMounted && handleDisconnect(),
-    };
-
+    
     // Set initial connection status
-    setIsConnected(socket.connected);
-
-    // Register event listeners
-    Object.entries(eventHandlers).forEach(([event, handler]) => {
-      socket.on(event, handler);
-    });
-
-    // Request active polls on mount if connected
-    if (socket.connected) {
-      console.log('📊 Requesting active polls on mount');
-      socket.emit('getActivePolls', { roomId });
+    if (isMounted) {
+      setIsConnected(socket.connected);
     }
+
+    // Only handle events that parent doesn't handle or that are specific to this component
+    const handleVoteConfirmedWrapper = (data: any) => isMounted && handleVoteConfirmed(data);
+    const handleNewPollWrapper = () => isMounted && handleNewPoll();
+    const handleConnectWrapper = () => isMounted && handleConnect();
+    const handleDisconnectWrapper = () => isMounted && handleDisconnect();
+
+    socket.on('voteConfirmed', handleVoteConfirmedWrapper);
+    socket.on('newPoll', handleNewPollWrapper);
+    socket.on('connect', handleConnectWrapper);
+    socket.on('disconnect', handleDisconnectWrapper);
 
     return () => {
       isMounted = false;
-      Object.keys(eventHandlers).forEach(event => {
-        socket.off(event);
-      });
+      socket.off('voteConfirmed', handleVoteConfirmedWrapper);
+      socket.off('newPoll', handleNewPollWrapper);
+      socket.off('connect', handleConnectWrapper);
+      socket.off('disconnect', handleDisconnectWrapper);
     };
-  }, [socket, roomId, handleNewPoll, handleActivePollsList, handleVoteConfirmed, 
-      handlePollClosed, handleConnect, handleDisconnect]);
+  }, [socket, handleVoteConfirmed, handleNewPoll, handleConnect, handleDisconnect]);
 
   // Form handlers
   const handleClickOutside = useCallback((e: React.PointerEvent) => {
@@ -334,8 +287,6 @@ const PollsList: React.FC<PollsListProps> = ({
   }, [pollOptionMapping, voteOnPollViaSocket, onVote]);
 
   // Memoized computed values
-  const displayPolls = useMemo(() => serverPolls, [serverPolls]);
-  
   const connectionStatus = useMemo(() => (
     socket && (
       <div className={`text-xs px-2 py-1 rounded ${
@@ -403,7 +354,7 @@ const PollsList: React.FC<PollsListProps> = ({
     );
   }, [pollOptionMapping, userVotes, handleLocalVote]);
 
-  if (displayPolls.length === 0) {
+  if (polls.length === 0) {
     return (
       <div className="space-y-4 sm:space-y-6 pb-4 sm:pb-0">
         {connectionStatus}
@@ -670,11 +621,11 @@ const PollsList: React.FC<PollsListProps> = ({
         {/* Info message about voting */}
         <div className="mb-3 text-sm text-purple-700 bg-purple-50 p-2 rounded">
           <span>
-            {displayPolls.length} active poll(s) • You can change your vote by selecting a different option
+            {polls.length} active poll(s) • You can change your vote by selecting a different option
           </span>
         </div>
         
-        {displayPolls.map((poll) => (
+        {polls.map((poll) => (
           <div
             key={poll.id}
             className="bg-gray-50 border p-4 sm:p-6 rounded-lg"
