@@ -47,7 +47,7 @@ const PollsList: React.FC<PollsListProps> = ({
   const modalRef = useRef<HTMLDivElement>(null);
 
   // Helper function to calculate time left
-  const calculateTimeLeft = (expiresAt: string): string => {
+  const calculateTimeLeft = useCallback((expiresAt: string): string => {
     const now = new Date().getTime();
     const expiry = new Date(expiresAt).getTime();
     const difference = expiry - now;
@@ -58,7 +58,7 @@ const PollsList: React.FC<PollsListProps> = ({
     const seconds = Math.floor((difference % (1000 * 60)) / 1000);
     
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
+  }, []);
 
   // Debounced WebSocket function to request active polls
   const debouncedRequestActivePolls = useCallback(
@@ -72,12 +72,47 @@ const PollsList: React.FC<PollsListProps> = ({
   );
 
   // WebSocket function to request active polls
-  const requestActivePolls = () => {
+  const requestActivePolls = useCallback(() => {
     if (socket && isConnected) {
       console.log('📊 Requesting active polls for room:', roomId);
       socket.emit('getActivePolls', { roomId });
     }
-  };
+  }, [socket, isConnected, roomId]);
+
+  // WebSocket function to create a poll
+  const createPollViaSocket = useCallback((pollData: { question: string; options: string[] }) => {
+    if (!socket || !isConnected) {
+      console.error('❌ Socket not connected');
+      alert('Not connected to server. Please try again.');
+      return;
+    }
+
+    console.log('📊 Creating poll via socket:', pollData);
+    socket.emit('createPoll', {
+      roomId,
+      userId,
+      name: pollData.question, // Using question as name for now
+      question: pollData.question,
+      options: pollData.options
+    });
+  }, [socket, isConnected, roomId, userId]);
+
+  // WebSocket function to vote on a poll
+  const voteOnPollViaSocket = useCallback((pollId: string, optionId: string) => {
+    if (!socket || !isConnected) {
+      console.error('❌ Socket not connected');
+      alert('Not connected to server. Please try again.');
+      return;
+    }
+
+    console.log('🗳️ Voting via socket:', { pollId, optionId });
+    socket.emit('votePoll', {
+      roomId,
+      pollId,
+      optionId,
+      userId
+    });
+  }, [socket, isConnected, roomId, userId]);
 
   // WebSocket event listeners
   useEffect(() => {
@@ -135,8 +170,7 @@ const PollsList: React.FC<PollsListProps> = ({
         timeLeft: poll.expiresAt ? calculateTimeLeft(poll.expiresAt) : "Expired"
       };
 
-      // Calculate percentages
-      formattedPoll.options.forEach(option => {
+      formattedPoll.options.forEach((option: any) => {
         option.percentage = formattedPoll.totalVotes > 0 
           ? Math.round((option.votes / formattedPoll.totalVotes) * 100) 
           : 0;
@@ -274,42 +308,7 @@ const PollsList: React.FC<PollsListProps> = ({
       // Cancel any pending debounced calls
       debouncedRequestActivePolls.cancel();
     };
-  }, [socket, roomId, userId, debouncedRequestActivePolls]);
-
-  // WebSocket function to create a poll
-  const createPollViaSocket = (pollData: { question: string; options: string[] }) => {
-    if (!socket || !isConnected) {
-      console.error('❌ Socket not connected');
-      alert('Not connected to server. Please try again.');
-      return;
-    }
-
-    console.log('📊 Creating poll via socket:', pollData);
-    socket.emit('createPoll', {
-      roomId,
-      userId,
-      name: pollData.question, // Using question as name for now
-      question: pollData.question,
-      options: pollData.options
-    });
-  };
-
-  // WebSocket function to vote on a poll
-  const voteOnPollViaSocket = (pollId: string, optionId: string) => {
-    if (!socket || !isConnected) {
-      console.error('❌ Socket not connected');
-      alert('Not connected to server. Please try again.');
-      return;
-    }
-
-    console.log('🗳️ Voting via socket:', { pollId, optionId });
-    socket.emit('votePoll', {
-      roomId,
-      pollId,
-      optionId,
-      userId
-    });
-  };
+  }, [socket, roomId, userId, debouncedRequestActivePolls, requestActivePolls, calculateTimeLeft]);
 
   // Close modal when clicking outside
   const handleClickOutside = (e: React.MouseEvent) => {
@@ -784,11 +783,6 @@ const PollsList: React.FC<PollsListProps> = ({
                     );
                   })}
                 </div>
-                {hasUserVoted && (
-                  <div className="mt-3 text-xs text-green-600 font-medium">
-                    ✓ You have voted on this poll. Click another option to change your vote.
-                  </div>
-                )}
               </div>
             );
           })}
