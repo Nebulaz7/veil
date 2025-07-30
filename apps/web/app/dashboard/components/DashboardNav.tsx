@@ -58,9 +58,9 @@ const DashboardNav = () => {
           /> */}
           <div className="dropdown dropdown-end">
             <div className="btn btn-ghost btn-circle avatar flex items-center gap-1">
-              <div className="w-10 rounded-full">
+              <div className="w-24 rounded-full">
                 {avatarError ? (
-                  <div className="w-16 h-16 rounded-full bg-purple-600 flex items-center justify-center text-white text-2xl font-semibold">
+                  <div className="w-24 h-24 rounded-full bg-purple-600 flex items-center justify-center text-white text-2xl font-semibold">
                     <Image
                       alt="User Avatar"
                       src="/avatar.svg"
@@ -72,19 +72,19 @@ const DashboardNav = () => {
                   <img
                     src={profile?.picture || "/avatar.svg"}
                     alt={profile?.name || "User Avatar"}
-                    className="w-16 h-16 rounded-full object-cover"
+                    className="w-24 h-24 rounded-full object-cover"
                     onError={() => setAvatarError(true)}
                   />
                 )}
               </div>
-              <div className="flex flex-col items-start">
-                <ChevronDown
-                  tabIndex={0}
-                  role="button"
-                  size={16}
-                  className="text-gray-600"
-                />
-              </div>
+            </div>
+            <div className="flex flex-col items-start">
+              <ChevronDown
+                tabIndex={0}
+                role="button"
+                size={24}
+                className="text-gray-600"
+              />
             </div>
             <ul
               tabIndex={0}
