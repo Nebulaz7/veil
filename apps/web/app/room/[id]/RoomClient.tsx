@@ -127,7 +127,7 @@ const RoomClient = () => {
 
     const userId = localStorage.getItem("temp_userId") ?? "guest";
     const isModerator = localStorage.getItem("is_moderator") === "true";
-    
+
     // Join room
     socket.emit("joinRoom", {
       roomId: roomId,
@@ -179,8 +179,8 @@ const RoomClient = () => {
 
     // Poll event handlers
     const handleNewPoll = (poll: any) => {
-      console.log('📊 New poll received:', poll);
-      
+      console.log("📊 New poll received:", poll);
+
       // Convert server poll format to client format
       const formattedPoll: Poll = {
         id: poll.id,
@@ -188,22 +188,30 @@ const RoomClient = () => {
         options: poll.options.map((opt: any) => ({
           text: opt.text,
           votes: opt.votes?.length || 0,
-          percentage: 0
+          percentage: 0,
         })),
-        totalVotes: poll.options.reduce((total: number, opt: any) => total + (opt.votes?.length || 0), 0),
-        timeLeft: poll.expiresAt ? calculateTimeLeft(poll.expiresAt) : "Expired"
+        totalVotes: poll.options.reduce(
+          (total: number, opt: any) => total + (opt.votes?.length || 0),
+          0
+        ),
+        timeLeft: poll.expiresAt
+          ? calculateTimeLeft(poll.expiresAt)
+          : "Expired",
       };
 
       // Calculate percentages
-      formattedPoll.options.forEach(option => {
-        option.percentage = formattedPoll.totalVotes > 0 
-          ? Math.round((option.votes / formattedPoll.totalVotes) * 100) 
-          : 0;
+      formattedPoll.options.forEach((option) => {
+        option.percentage =
+          formattedPoll.totalVotes > 0
+            ? Math.round((option.votes / formattedPoll.totalVotes) * 100)
+            : 0;
       });
 
       setPolls((prev) => {
         // Remove any existing poll with same question and add new one
-        const filtered = prev.filter(p => p.question !== formattedPoll.question);
+        const filtered = prev.filter(
+          (p) => p.question !== formattedPoll.question
+        );
         return [formattedPoll, ...filtered];
       });
 
@@ -211,21 +219,29 @@ const RoomClient = () => {
     };
 
     const handleActivePollsList = (pollsData: any[]) => {
-      console.log('📊 Active polls received:', pollsData);
-      
+      console.log("📊 Active polls received:", pollsData);
+
       const formattedPolls: Poll[] = pollsData.map((poll: any) => {
-        const totalVotes = poll.options.reduce((total: number, opt: any) => total + (opt.votes?.length || 0), 0);
-        
+        const totalVotes = poll.options.reduce(
+          (total: number, opt: any) => total + (opt.votes?.length || 0),
+          0
+        );
+
         return {
           id: poll.id,
           question: poll.question,
           options: poll.options.map((opt: any) => ({
             text: opt.text,
             votes: opt.votes?.length || 0,
-            percentage: totalVotes > 0 ? Math.round(((opt.votes?.length || 0) / totalVotes) * 100) : 0
+            percentage:
+              totalVotes > 0
+                ? Math.round(((opt.votes?.length || 0) / totalVotes) * 100)
+                : 0,
           })),
           totalVotes,
-          timeLeft: poll.expiresAt ? calculateTimeLeft(poll.expiresAt) : "Expired"
+          timeLeft: poll.expiresAt
+            ? calculateTimeLeft(poll.expiresAt)
+            : "Expired",
         };
       });
 
@@ -234,26 +250,26 @@ const RoomClient = () => {
     };
 
     const handlePollVoteAdded = (voteData: any) => {
-      console.log('🗳️ Vote added:', voteData);
+      console.log("🗳️ Vote added:", voteData);
       // Request fresh polls to get updated vote counts
       socket.emit("getActivePolls", { roomId });
     };
 
     const handleVoteConfirmed = (data: any) => {
-      console.log('✅ Vote confirmed:', data);
+      console.log("✅ Vote confirmed:", data);
       // Request fresh polls to get updated results
       socket.emit("getActivePolls", { roomId });
     };
 
     const handlePollClosed = (data: any) => {
-      console.log('📊 Poll closed:', data);
+      console.log("📊 Poll closed:", data);
       // Remove closed poll from active polls
-      setPolls(prev => prev.filter(poll => poll.id !== data.pollId));
+      setPolls((prev) => prev.filter((poll) => poll.id !== data.pollId));
       updateActivePollsCount();
     };
 
     const handlePollError = (data: any) => {
-      console.error('❌ Poll error:', data.message);
+      console.error("❌ Poll error:", data.message);
       // Show user-friendly error message
       alert(`Poll Error: ${data.message}`);
     };
@@ -349,8 +365,8 @@ const RoomClient = () => {
 
     const minutes = Math.floor(difference / (1000 * 60));
     const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-    
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
   // Function to update active polls count
@@ -567,22 +583,25 @@ const RoomClient = () => {
 
   // NEW: WebSocket-based vote handler
   const handleVote = (pollId: string, optionIndex: number) => {
-    console.log('🗳️ WebSocket vote:', { pollId, optionIndex });
+    console.log("🗳️ WebSocket vote:", { pollId, optionIndex });
     // This will be handled by the PollsList component via WebSocket
     // The actual voting logic is in the PollsList component
   };
 
   // NEW: WebSocket-based poll creation
-  const handleCreatePoll = (poll: { question: string; options: { text: string }[] }) => {
-    console.log('📊 Creating poll via WebSocket:', poll);
-    
+  const handleCreatePoll = (poll: {
+    question: string;
+    options: { text: string }[];
+  }) => {
+    console.log("📊 Creating poll via WebSocket:", poll);
+
     if (!socket || !socket.connected) {
       alert("Not connected to server. Please try again.");
       return;
     }
 
     // Extract option texts from the options objects
-    const optionTexts = poll.options.map(opt => opt.text);
+    const optionTexts = poll.options.map((opt) => opt.text);
 
     // Emit via WebSocket
     socket.emit("createPoll", {
@@ -590,23 +609,23 @@ const RoomClient = () => {
       userId,
       name: poll.question, // Using question as name
       question: poll.question,
-      options: optionTexts
+      options: optionTexts,
     });
   };
 
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <RoomHeader 
-        userCount={userCount} 
+      <RoomHeader
+        userCount={userCount}
         onLeaveRoom={HandleLeaveRoom}
         activePollsCount={activePollsCount}
       />
 
       <div className="max-w-4xl mx-auto p-2 sm:p-4">
         {/* Tabs */}
-        <TabNavigation 
-          activeTab={activeTab} 
+        <TabNavigation
+          activeTab={activeTab}
           onTabChange={setActiveTab}
           activePollsCount={activePollsCount}
         />
