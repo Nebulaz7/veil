@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { BarChart3, Plus, X, AlertCircle } from "lucide-react";
 import { Poll } from "../types";
+import _ from "lodash";
 
 interface PollsListProps {
   polls: Poll[];
@@ -45,6 +46,39 @@ const PollsList: React.FC<PollsListProps> = ({
 
   const modalRef = useRef<HTMLDivElement>(null);
 
+  // Helper function to calculate time left
+  const calculateTimeLeft = (expiresAt: string): string => {
+    const now = new Date().getTime();
+    const expiry = new Date(expiresAt).getTime();
+    const difference = expiry - now;
+
+    if (difference <= 0) return "Expired";
+
+    const minutes = Math.floor(difference / (1000 * 60));
+    const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+    
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Debounced WebSocket function to request active polls
+  const debouncedRequestActivePolls = useCallback(
+    _.debounce(() => {
+      if (socket && isConnected) {
+        console.log('📊 Requesting active polls for room:', roomId);
+        socket.emit('getActivePolls', { roomId });
+      }
+    }, 300), // 300ms debounce
+    [socket, isConnected, roomId]
+  );
+
+  // WebSocket function to request active polls
+  const requestActivePolls = () => {
+    if (socket && isConnected) {
+      console.log('📊 Requesting active polls for room:', roomId);
+      socket.emit('getActivePolls', { roomId });
+    }
+  };
+
   // WebSocket event listeners
   useEffect(() => {
     if (!socket) return;
@@ -75,11 +109,42 @@ const PollsList: React.FC<PollsListProps> = ({
         return updated;
       });
       
-      // Remove from local polls if it exists and add to server polls
+      // Remove from local polls if it exists
       setLocalPolls(prev => prev.filter(p => p.question !== poll.question));
       
-      // Request fresh polls list to get updated data
-      requestActivePolls();
+      // Convert the single poll to the expected format and add directly
+      const newUserVotes: { [pollId: string]: string } = {};
+      
+      // Check if current user has voted on any option
+      poll.options.forEach((opt: any) => {
+        if (opt.votes && opt.votes.includes(userId)) {
+          newUserVotes[poll.id] = opt.id;
+          console.log(`📊 User ${userId} has voted for option ${opt.id} in poll ${poll.id}`);
+        }
+      });
+
+      const formattedPoll = {
+        id: poll.id,
+        question: poll.question,
+        options: poll.options.map((opt: any) => ({
+          text: opt.text,
+          votes: opt.votes?.length || 0,
+          percentage: 0
+        })),
+        totalVotes: poll.options.reduce((total: number, opt: any) => total + (opt.votes?.length || 0), 0),
+        timeLeft: poll.expiresAt ? calculateTimeLeft(poll.expiresAt) : "Expired"
+      };
+
+      // Calculate percentages
+      formattedPoll.options.forEach(option => {
+        option.percentage = formattedPoll.totalVotes > 0 
+          ? Math.round((option.votes / formattedPoll.totalVotes) * 100) 
+          : 0;
+      });
+
+      // Update states directly instead of requesting all polls
+      setUserVotes(prev => ({ ...prev, ...newUserVotes }));
+      setServerPolls(prev => [formattedPoll, ...prev]);
     };
 
     // Listen for active polls list
@@ -137,11 +202,10 @@ const PollsList: React.FC<PollsListProps> = ({
       setServerPolls(formattedPolls);
     };
 
-    // Listen for poll votes
+    // Listen for poll votes - don't refresh polls here
     const handlePollVoteAdded = (voteData: any) => {
       console.log('🗳️ Vote added:', voteData);
-      // Refresh active polls to get updated vote counts
-      requestActivePolls();
+      // Don't refresh here since voteConfirmed will handle it
     };
 
     // Listen for vote confirmation
@@ -154,14 +218,14 @@ const PollsList: React.FC<PollsListProps> = ({
       }));
       // Refresh polls to show updated results
       console.log('🔄 Refreshing polls after vote confirmation');
-      requestActivePolls();
+      debouncedRequestActivePolls();
     };
 
     // Listen for poll closure
     const handlePollClosed = (data: any) => {
       console.log('📊 Poll closed:', data);
       // Remove from active polls or mark as closed
-      requestActivePolls();
+      debouncedRequestActivePolls();
     };
 
     // Listen for poll errors
@@ -175,7 +239,7 @@ const PollsList: React.FC<PollsListProps> = ({
       console.log('🟢 Socket connected');
       setIsConnected(true);
       // Request active polls when connected
-      requestActivePolls();
+      debouncedRequestActivePolls();
     };
 
     const handleDisconnect = () => {
@@ -206,30 +270,11 @@ const PollsList: React.FC<PollsListProps> = ({
       socket.off('pollError', handlePollError);
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
+      
+      // Cancel any pending debounced calls
+      debouncedRequestActivePolls.cancel();
     };
-  }, [socket, roomId, userId]);
-
-  // Helper function to calculate time left
-  const calculateTimeLeft = (expiresAt: string): string => {
-    const now = new Date().getTime();
-    const expiry = new Date(expiresAt).getTime();
-    const difference = expiry - now;
-
-    if (difference <= 0) return "Expired";
-
-    const minutes = Math.floor(difference / (1000 * 60));
-    const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-    
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  // WebSocket function to request active polls
-  const requestActivePolls = () => {
-    if (socket && isConnected) {
-      console.log('📊 Requesting active polls for room:', roomId);
-      socket.emit('getActivePolls', { roomId });
-    }
-  };
+  }, [socket, roomId, userId, debouncedRequestActivePolls]);
 
   // WebSocket function to create a poll
   const createPollViaSocket = (pollData: { question: string; options: string[] }) => {
