@@ -57,14 +57,10 @@ const DashboardNav = () => {
             className="input border-[2px] border-gray-500 rounded-full input-bordered w-24 md:w-auto"
           /> */}
           <div className="dropdown dropdown-end">
-            <div
-              tabIndex={0}
-              role="button"
-              className="btn btn-ghost btn-circle avatar flex items-center gap-1"
-            >
+            <div className="btn btn-ghost btn-circle avatar flex items-center gap-1">
               <div className="w-10 rounded-full">
                 {avatarError ? (
-                  <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white text-2xl font-semibold">
+                  <div className="w-16 h-16 rounded-full bg-purple-600 flex items-center justify-center text-white text-2xl font-semibold">
                     <Image
                       alt="User Avatar"
                       src="/avatar.svg"
@@ -76,12 +72,17 @@ const DashboardNav = () => {
                   <img
                     src={profile?.picture || "/avatar.svg"}
                     alt={profile?.name || "User Avatar"}
-                    className="w-10 h-10 rounded-full object-cover"
+                    className="w-16 h-16 rounded-full object-cover"
                     onError={() => setAvatarError(true)}
                   />
                 )}
               </div>
-              <ChevronDown size={16} className="text-gray-600" />
+              <ChevronDown
+                tabIndex={0}
+                role="button"
+                size={16}
+                className="text-gray-600"
+              />
             </div>
             <ul
               tabIndex={0}
