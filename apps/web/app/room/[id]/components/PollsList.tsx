@@ -63,7 +63,6 @@ const PollsList: React.FC<PollsListProps> = ({
   // Optimized function to request active polls (no debouncing needed)
   const requestActivePolls = useCallback(() => {
     if (socket && isConnected) {
-      console.log('📊 Requesting active polls for room:', roomId);
       socket.emit('getActivePolls', { roomId });
     }
   }, [socket, isConnected, roomId]);
@@ -95,7 +94,6 @@ const PollsList: React.FC<PollsListProps> = ({
   // WebSocket function to vote on a poll
   const voteOnPollViaSocket = useCallback((pollId: string, optionId: string) => {
     if (!socket || !isConnected) {
-      console.error('❌ Socket not connected');
       return;
     }
 
@@ -117,7 +115,7 @@ const PollsList: React.FC<PollsListProps> = ({
 
     // Listen for new polls from other users
     const handleNewPoll = (poll: any) => {
-      console.log('📊 New poll received:', poll);
+    
       setIsCreatingPoll(false); // Reset creating state
       
       // Create mapping for this new poll's options
@@ -170,7 +168,7 @@ const PollsList: React.FC<PollsListProps> = ({
 
     // Listen for active polls list
     const handleActivePollsList = (pollsData: any[]) => {
-      console.log('📊 Active polls received:', pollsData.length, 'polls');
+    
       
       // Store option ID mappings for voting
       const newMappings: { [pollId: string]: { [optionIndex: number]: string } } = {};
@@ -213,7 +211,6 @@ const PollsList: React.FC<PollsListProps> = ({
 
     // Listen for vote confirmation - only update user vote tracking
     const handleVoteConfirmed = (data: any) => {
-      console.log('✅ Vote confirmed:', data);
       setUserVotes(prev => ({
         ...prev,
         [data.pollId]: data.optionId
@@ -224,19 +221,16 @@ const PollsList: React.FC<PollsListProps> = ({
 
     // Listen for poll closure
     const handlePollClosed = (data: any) => {
-      console.log('📊 Poll closed:', data);
       setServerPolls(prev => prev.filter(poll => poll.id !== data.pollId));
     };
 
     // Listen for connection status changes
     const handleConnect = () => {
-      console.log('🟢 Socket connected');
       setIsConnected(true);
       requestActivePolls();
     };
 
     const handleDisconnect = () => {
-      console.log('🔴 Socket disconnected');
       setIsConnected(false);
     };
 
@@ -351,12 +345,11 @@ const PollsList: React.FC<PollsListProps> = ({
     
     if (optionMapping && optionMapping[optionIndex]) {
       const optionId = optionMapping[optionIndex];
-      console.log('🗳️ Voting on poll:', { pollId, optionIndex, optionId });
+     
       
       voteOnPollViaSocket(pollId, optionId);
       onVote(pollId, optionIndex);
     } else {
-      console.error('❌ No option mapping found for poll:', pollId);
       // Try to refresh polls to get mappings
       requestActivePolls();
     }
@@ -368,7 +361,7 @@ const PollsList: React.FC<PollsListProps> = ({
   return (
     <div className="space-y-4 sm:space-y-6 pb-4 sm:pb-0">
       {/* Connection status indicator */}
-      {socket && (
+{/*       {socket && (
         <div className={`text-xs px-2 py-1 rounded ${
           isConnected 
             ? 'bg-green-100 text-green-800' 
@@ -376,7 +369,7 @@ const PollsList: React.FC<PollsListProps> = ({
         }`}>
           {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
         </div>
-      )}
+      )} */}
 
       {showModal && (
         <div
