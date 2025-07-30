@@ -1,7 +1,5 @@
 export interface Question {
   id: string;
-  userId: string;
-  username: string;
   question: string;
   timestamp: string;
   upvotes: number;
