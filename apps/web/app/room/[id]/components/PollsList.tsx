@@ -75,12 +75,12 @@ const PollsList: React.FC<PollsListProps> = ({
     }
 
     if (isCreatingPoll) {
-      console.log('📊 Already creating a poll, skipping...');
+      console.log(' Already creating a poll, skipping...');
       return;
     }
 
     setIsCreatingPoll(true);
-    console.log('📊 Creating poll via socket:', pollData);
+   
     
     socket.emit('createPoll', {
       roomId,
@@ -97,7 +97,7 @@ const PollsList: React.FC<PollsListProps> = ({
       return;
     }
 
-    console.log('🗳️ Voting via socket:', { pollId, optionId });
+
     socket.emit('votePoll', {
       roomId,
       pollId,
@@ -378,7 +378,7 @@ const PollsList: React.FC<PollsListProps> = ({
         >
           <div
             ref={modalRef}
-            className="bg-white rounded-lg w-full max-w-md p-5 max-h-[90vh] overflow-y-auto"
+            className="bg-transparent rounded-lg w-full max-w-md p-5 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-4">
