@@ -318,7 +318,7 @@ const PollItem: React.FC<PollItemProps> = ({
                 {/* Copy Link Section */}
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Poll code
+                    Room code
                   </label>
                   <div className="flex items-center space-x-2">
                     <div className="flex-1 px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-900 border border-gray-200 overflow-hidden">
