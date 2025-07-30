@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { ChevronDown } from "lucide-react";
 
 // Svgs import
 import ProfileIcon from "./svg/ProfileIcon";
@@ -59,7 +60,7 @@ const DashboardNav = () => {
             <div
               tabIndex={0}
               role="button"
-              className="btn btn-ghost btn-circle avatar"
+              className="btn btn-ghost btn-circle avatar flex items-center gap-1"
             >
               <div className="w-10 rounded-full">
                 {avatarError ? (
@@ -80,6 +81,7 @@ const DashboardNav = () => {
                   />
                 )}
               </div>
+              <ChevronDown size={16} className="text-gray-600" />
             </div>
             <ul
               tabIndex={0}
