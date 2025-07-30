@@ -1,6 +1,6 @@
 export interface Question {
   id: string;
-  user: string;
+  userId: string;
   username: string;
   question: string;
   timestamp: string;
