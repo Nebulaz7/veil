@@ -6,7 +6,6 @@ import ReplySection from "./ReplySection";
 interface QuestionItemProps {
   question: Question;
   userId: string;
-  username: string;
   expandedQuestions: Set<string>;
   replyInputs: Record<string, string>;
   isSubmittingReply: Record<string, boolean>;
@@ -21,7 +20,6 @@ interface QuestionItemProps {
 const QuestionItem: React.FC<QuestionItemProps> = ({
   question,
   userId,
-  username,
   expandedQuestions,
   replyInputs,
   isSubmittingReply,
