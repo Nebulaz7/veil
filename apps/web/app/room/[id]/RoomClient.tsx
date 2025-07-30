@@ -533,33 +533,109 @@ const RoomClient = () => {
     }
   };
 
-  const handleSubmitQuestion = () => {
-  if (
-    !newQuestion.trim() ||
-    !roomId ||
-    isRoomLoading ||
-    rateLimitRemaining > 0
-  ) {
-    if (rateLimitRemaining > 0) {
-      console.warn("Rate limited - please wait");
-    } else {
-      console.warn("Missing question or roomId");
-    }
+ // Updated handleSubmitQuestion with better error handling and debugging
+const handleSubmitQuestion = () => {
+  // Add debug logging to identify the issue
+  console.log('Debug info:', {
+    newQuestion: newQuestion,
+    newQuestionTrimmed: newQuestion.trim(),
+    roomId: roomId,
+    isRoomLoading: isRoomLoading,
+    rateLimitRemaining: rateLimitRemaining,
+    userId: localStorage.getItem("temp_userId"),
+    username: localStorage.getItem("temp_username"),
+    socketConnected: socket?.connected
+  });
+
+  // Check each condition individually with user feedback
+  if (!newQuestion.trim()) {
+    console.warn("Question is empty or only whitespace");
+    alert("Please enter a question before submitting.");
+    return;
+  }
+
+  if (!roomId) {
+    console.warn("RoomId is missing");
+    alert("Room ID is missing. Please refresh the page and try again.");
+    return;
+  }
+
+  if (isRoomLoading) {
+    console.warn("Room is still loading");
+    alert("Room is still loading. Please wait a moment and try again.");
+    return;
+  }
+
+  if (rateLimitRemaining > 0) {
+    console.warn("Rate limited - please wait");
+    alert(`Please wait ${rateLimitRemaining} seconds before submitting another question.`);
+    return;
+  }
+
+  // Check socket connection
+  if (!socket || !socket.connected) {
+    console.warn("Socket not connected");
+    alert("Connection to server lost. Please refresh the page and try again.");
     return;
   }
 
   const userId = localStorage.getItem("temp_userId");
   const username = localStorage.getItem("temp_username");
 
-  socket.emit("askQuestion", {
+  // Generate fallback values if localStorage is empty
+  const finalUserId = userId || `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const finalUsername = username || "Anonymous User";
+
+  // Store the generated values if they were missing
+  if (!userId) {
+    localStorage.setItem("temp_userId", finalUserId);
+    console.log("Generated new userId:", finalUserId);
+  }
+
+  if (!username) {
+    localStorage.setItem("temp_username", finalUsername);
+    console.log("Generated new username:", finalUsername);
+  }
+
+  console.log('Emitting askQuestion with:', {
     roomId,
-    userId: userId ?? "anonymous",
-    username: username ?? "Anonymous",
+    userId: finalUserId,
+    username: finalUsername,
     question: newQuestion,
   });
 
-  setNewQuestion("");
+  try {
+    socket.emit("askQuestion", {
+      roomId,
+      userId: finalUserId,
+      username: finalUsername,
+      question: newQuestion,
+    });
+
+    setNewQuestion("");
+    console.log("Question submitted successfully");
+  } catch (error) {
+    console.error("Error submitting question:", error);
+    alert("Failed to submit question. Please try again.");
+  }
 };
+
+useEffect(() => {
+  let storedUserId = localStorage.getItem("temp_userId");
+  let storedUsername = localStorage.getItem("temp_username");
+
+  if (!storedUserId) {
+    storedUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    localStorage.setItem("temp_userId", storedUserId);
+    console.log("Generated userId on mount:", storedUserId);
+  }
+
+  if (!storedUsername) {
+    storedUsername = "Anonymous User";
+    localStorage.setItem("temp_username", storedUsername);
+    console.log("Generated username on mount:", storedUsername);
+  }
+}, []);
 
   const handleLike = (questionId: string) => {
     if (!socket) return;
