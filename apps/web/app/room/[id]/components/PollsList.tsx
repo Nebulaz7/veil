@@ -2,9 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import { BarChart3, Plus, X, AlertCircle } from "lucide-react";
 import { Poll } from "../types";
 
-// Use the existing PollOption interface from types
-// No need to redefine it here
-
 interface PollsListProps {
   polls: Poll[];
   onVote: (pollId: string, optionIndex: number) => void;
@@ -12,7 +9,6 @@ interface PollsListProps {
     question: string;
     options: { text: string }[];
   }) => void;
-  // Add WebSocket and room props
   socket?: any;
   roomId: string;
   userId: string;
@@ -33,15 +29,16 @@ const PollsList: React.FC<PollsListProps> = ({
     title?: string;
     options?: string;
   }>({});
+  
   // State to hold server polls
   const [serverPolls, setServerPolls] = useState<Poll[]>([]);
   // State to hold locally created polls before server sync
   const [localPolls, setLocalPolls] = useState<Poll[]>([]);
-  // State to track which polls the user has already voted on
-  const [votedPolls, setVotedPolls] = useState<string[]>([]);
+  // State to track which polls the user has voted on and their selected option
+  const [userVotes, setUserVotes] = useState<{[pollId: string]: string}>({});
   // State to store mapping of poll options to their server IDs
   const [pollOptionMapping, setPollOptionMapping] = useState<{
-    [pollId: string]: { [optionIndex: number]: string };
+    [pollId: string]: { [optionIndex: number]: string }
   }>({});
   // State for WebSocket connection status
   const [isConnected, setIsConnected] = useState(false);
@@ -57,102 +54,56 @@ const PollsList: React.FC<PollsListProps> = ({
 
     // Listen for new polls from other users
     const handleNewPoll = (poll: any) => {
-      console.log("📊 New poll received:", poll);
-
-      // Check if poll has options with IDs
-      if (poll.options && Array.isArray(poll.options)) {
-        // Create mapping for this new poll's options
-        const optionMapping: { [optionIndex: number]: string } = {};
-
-        // Log the structure to debug
-        console.log("Poll options structure:", JSON.stringify(poll.options));
-
-        poll.options.forEach((opt: any, index: number) => {
-          // Different backends might have different property names
-          const optionId = opt.id || opt._id || `${poll.id}-option-${index}`;
-          optionMapping[index] = optionId;
-          console.log(`Mapped option ${index} to ID ${optionId}`);
-
-          // Check if current user has voted for this option in the new poll
-          if (opt.votes && Array.isArray(opt.votes)) {
-            const userVoted = opt.votes.some(
-              (vote: any) => vote.voterId === userId || vote.userId === userId
-            );
-            if (userVoted) {
-              setUserVoteChoices((prev) => ({ ...prev, [poll.id]: index }));
-              setVotedPolls((prev) => {
-                if (!prev.includes(poll.id)) {
-                  return [...prev, poll.id];
-                }
-                return prev;
-              });
-              console.log(
-                `User ${userId} voted for option ${index} in new poll ${poll.id}`
-              );
-            }
-          }
-        });
-
-        // Update the mapping state immediately
-        setPollOptionMapping((prev) => {
-          const newMapping = {
-            ...prev,
-            [poll.id]: optionMapping,
-          };
-          console.log("Updated option mappings:", newMapping);
-          return newMapping;
-        });
-      }
-
+      console.log('📊 New poll received:', poll);
+      
+      // Create mapping for this new poll's options
+      const optionMapping: { [optionIndex: number]: string } = {};
+      poll.options.forEach((opt: any, index: number) => {
+        optionMapping[index] = opt.id;
+        console.log(`Mapped option ${index} to ID ${opt.id}`);
+      });
+      
+      console.log('Poll options structure:', JSON.stringify(poll.options));
+      
+      // Update the mapping state
+      setPollOptionMapping(prev => {
+        const updated = {
+          ...prev,
+          [poll.id]: optionMapping
+        };
+        console.log('Updated option mappings:', updated);
+        return updated;
+      });
+      
       // Remove from local polls if it exists and add to server polls
-      setLocalPolls((prev) => prev.filter((p) => p.question !== poll.question));
-
-      // Add to polls via parent component callback or update local state
-      // Since we don't have direct access to polls state, we'll trigger a refresh
+      setLocalPolls(prev => prev.filter(p => p.question !== poll.question));
+      
+      // Request fresh polls list to get updated data
       requestActivePolls();
     };
 
     // Listen for active polls list
     const handleActivePollsList = (pollsData: any[]) => {
-      console.log("📊 Active polls received:", pollsData);
-
+      console.log('📊 Active polls received:', pollsData);
+      
       // Store option ID mappings for voting
-      const newMappings: {
-        [pollId: string]: { [optionIndex: number]: string };
-      } = {};
-
-      // Track user vote choices from server data
-      const newUserVoteChoices: { [pollId: string]: number } = {};
-
+      const newMappings: { [pollId: string]: { [optionIndex: number]: string } } = {};
+      const newUserVotes: { [pollId: string]: string } = {};
+      
       // Convert server polls format to component format
       const formattedPolls: Poll[] = pollsData.map((poll: any) => {
         // Create mapping for this poll's options
         const optionMapping: { [optionIndex: number]: string } = {};
-
-        if (poll.options && Array.isArray(poll.options)) {
-          poll.options.forEach((opt: any, index: number) => {
-            // Try to get the option ID from different possible property names
-            const optionId = opt.id || opt._id || `${poll.id}-option-${index}`;
-            optionMapping[index] = optionId;
-            console.log(
-              `Poll ${poll.id}: Mapped option ${index} to ID ${optionId}`
-            );
-
-            // Check if current user has voted for this option
-            if (opt.votes && Array.isArray(opt.votes)) {
-              const userVoted = opt.votes.some(
-                (vote: any) => vote.voterId === userId || vote.userId === userId
-              );
-              if (userVoted) {
-                newUserVoteChoices[poll.id] = index;
-                console.log(
-                  `User ${userId} voted for option ${index} in poll ${poll.id}`
-                );
-              }
-            }
-          });
-        }
-
+        poll.options.forEach((opt: any, index: number) => {
+          optionMapping[index] = opt.id;
+          console.log(`Poll ${poll.id}: Mapped option ${index} to ID ${opt.id}`);
+          
+          // Check if current user has voted on this option
+          if (opt.votes && opt.votes.includes(userId)) {
+            newUserVotes[poll.id] = opt.id;
+            console.log(`📊 User ${userId} has voted for option ${opt.id} in poll ${poll.id}`);
+          }
+        });
         newMappings[poll.id] = optionMapping;
 
         return {
@@ -161,157 +112,102 @@ const PollsList: React.FC<PollsListProps> = ({
           options: poll.options.map((opt: any) => ({
             text: opt.text,
             votes: opt.votes?.length || 0,
-            percentage: 0,
+            percentage: 0
           })),
-          totalVotes: poll.options.reduce(
-            (total: number, opt: any) => total + (opt.votes?.length || 0),
-            0
-          ),
-          timeLeft: poll.expiresAt
-            ? calculateTimeLeft(poll.expiresAt)
-            : "Expired",
+          totalVotes: poll.options.reduce((total: number, opt: any) => total + (opt.votes?.length || 0), 0),
+          timeLeft: poll.expiresAt ? calculateTimeLeft(poll.expiresAt) : "Expired"
         };
       });
 
       // Calculate percentages
-      formattedPolls.forEach((poll) => {
-        poll.options.forEach((option) => {
-          option.percentage =
-            poll.totalVotes > 0
-              ? Math.round((option.votes / poll.totalVotes) * 100)
-              : 0;
+      formattedPolls.forEach(poll => {
+        poll.options.forEach(option => {
+          option.percentage = poll.totalVotes > 0 
+            ? Math.round((option.votes / poll.totalVotes) * 100) 
+            : 0;
         });
       });
 
-      // Update mappings, server polls state, and user vote choices from server data
-      console.log("📊 Updating option mappings with:", newMappings);
-      console.log("📊 Updating user vote choices with:", newUserVoteChoices);
-      setPollOptionMapping((prev) => ({ ...prev, ...newMappings }));
+      // Update mappings and server polls state
+      console.log('📊 Updating option mappings with:', newMappings);
+      console.log('📊 Updating user vote choices with:', newUserVotes);
+      
+      setPollOptionMapping(prev => ({ ...prev, ...newMappings }));
+      setUserVotes(prev => ({ ...prev, ...newUserVotes }));
       setServerPolls(formattedPolls);
-
-      // Update user vote choices based on server data
-      setUserVoteChoices((prev) => ({ ...prev, ...newUserVoteChoices }));
-
-      // Update voted polls list
-      const votedPollIds = Object.keys(newUserVoteChoices);
-      setVotedPolls((prev) => {
-        const updated = [...new Set([...prev, ...votedPollIds])];
-        return updated;
-      });
     };
 
     // Listen for poll votes
     const handlePollVoteAdded = (voteData: any) => {
-      console.log("🗳️ Vote added:", voteData);
+      console.log('🗳️ Vote added:', voteData);
       // Refresh active polls to get updated vote counts
       requestActivePolls();
     };
 
     // Listen for vote confirmation
     const handleVoteConfirmed = (data: any) => {
-      console.log("✅ Vote confirmed:", data);
-
-      // Add poll to voted polls if not already there
-      setVotedPolls((prev) => {
-        if (!prev.includes(data.pollId)) {
-          return [...prev, data.pollId];
-        }
-        return prev;
-      });
-
-      // Find which option index corresponds to the confirmed optionId
-      const pollMapping = pollOptionMapping[data.pollId];
-      if (pollMapping) {
-        const optionIndex = Object.keys(pollMapping).find(
-          (index) => pollMapping[parseInt(index)] === data.optionId
-        );
-        if (optionIndex !== undefined) {
-          setUserVoteChoices((prev) => ({
-            ...prev,
-            [data.pollId]: parseInt(optionIndex),
-          }));
-          console.log(
-            `Updated user choice for poll ${data.pollId} to option ${optionIndex}`
-          );
-        }
-      }
-
-      // Delay the polls refresh slightly to ensure the server has processed the vote
-      setTimeout(() => {
-        console.log("🔄 Refreshing polls after vote confirmation");
-        requestActivePolls();
-      }, 500);
+      console.log('✅ Vote confirmed:', data);
+      // Update local user votes tracking
+      setUserVotes(prev => ({
+        ...prev,
+        [data.pollId]: data.optionId
+      }));
+      // Refresh polls to show updated results
+      console.log('🔄 Refreshing polls after vote confirmation');
+      requestActivePolls();
     };
 
     // Listen for poll closure
     const handlePollClosed = (data: any) => {
-      console.log("📊 Poll closed:", data);
+      console.log('📊 Poll closed:', data);
       // Remove from active polls or mark as closed
       requestActivePolls();
     };
 
     // Listen for poll errors
     const handlePollError = (data: any) => {
-      console.error("❌ Poll error:", data.message);
-
-      // Check for specific error types and handle appropriately
-      if (data.message.includes("not found")) {
-        // The poll or option wasn't found - this might be a timing issue
-        console.log(
-          "⚠️ This appears to be a server-side issue with option handling"
-        );
-
-        // Delay the refresh slightly to give the server time to complete any pending operations
-        setTimeout(() => {
-          requestActivePolls();
-        }, 1000);
-
-        // Don't show an alert for this common error
-        // It seems to happen after votes are actually recorded
-      } else {
-        // For other errors, show the original message
-        alert(`Error: ${data.message}`);
-      }
+      console.error('❌ Poll error:', data.message);
+      alert(data.message); // You might want to use a proper notification system
     };
 
     // Listen for connection status changes
     const handleConnect = () => {
-      console.log("🟢 Socket connected");
+      console.log('🟢 Socket connected');
       setIsConnected(true);
       // Request active polls when connected
       requestActivePolls();
     };
 
     const handleDisconnect = () => {
-      console.log("🔴 Socket disconnected");
+      console.log('🔴 Socket disconnected');
       setIsConnected(false);
     };
 
     // Add event listeners
-    socket.on("newPoll", handleNewPoll);
-    socket.on("activePollsList", handleActivePollsList);
-    socket.on("pollVoteAdded", handlePollVoteAdded);
-    socket.on("voteConfirmed", handleVoteConfirmed);
-    socket.on("pollClosed", handlePollClosed);
-    socket.on("pollError", handlePollError);
-    socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
+    socket.on('newPoll', handleNewPoll);
+    socket.on('activePollsList', handleActivePollsList);
+    socket.on('pollVoteAdded', handlePollVoteAdded);
+    socket.on('voteConfirmed', handleVoteConfirmed);
+    socket.on('pollClosed', handlePollClosed);
+    socket.on('pollError', handlePollError);
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
 
     // Request active polls on mount
     requestActivePolls();
 
     // Cleanup listeners on unmount
     return () => {
-      socket.off("newPoll", handleNewPoll);
-      socket.off("activePollsList", handleActivePollsList);
-      socket.off("pollVoteAdded", handlePollVoteAdded);
-      socket.off("voteConfirmed", handleVoteConfirmed);
-      socket.off("pollClosed", handlePollClosed);
-      socket.off("pollError", handlePollError);
-      socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
+      socket.off('newPoll', handleNewPoll);
+      socket.off('activePollsList', handleActivePollsList);
+      socket.off('pollVoteAdded', handlePollVoteAdded);
+      socket.off('voteConfirmed', handleVoteConfirmed);
+      socket.off('pollClosed', handlePollClosed);
+      socket.off('pollError', handlePollError);
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
     };
-  }, [socket, roomId]);
+  }, [socket, roomId, userId]);
 
   // Helper function to calculate time left
   const calculateTimeLeft = (expiresAt: string): string => {
@@ -323,85 +219,54 @@ const PollsList: React.FC<PollsListProps> = ({
 
     const minutes = Math.floor(difference / (1000 * 60));
     const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+    
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   // WebSocket function to request active polls
   const requestActivePolls = () => {
     if (socket && isConnected) {
-      console.log("📊 Requesting active polls for room:", roomId);
-      socket.emit("getActivePolls", { roomId });
+      console.log('📊 Requesting active polls for room:', roomId);
+      socket.emit('getActivePolls', { roomId });
     }
   };
 
   // WebSocket function to create a poll
-  const createPollViaSocket = (pollData: {
-    question: string;
-    options: string[];
-  }) => {
+  const createPollViaSocket = (pollData: { question: string; options: string[] }) => {
     if (!socket || !isConnected) {
-      console.error("❌ Socket not connected");
-      alert("Not connected to server. Please try again.");
+      console.error('❌ Socket not connected');
+      alert('Not connected to server. Please try again.');
       return;
     }
 
-    console.log("📊 Creating poll via socket:", pollData);
-    socket.emit("createPoll", {
+    console.log('📊 Creating poll via socket:', pollData);
+    socket.emit('createPoll', {
       roomId,
       userId,
       name: pollData.question, // Using question as name for now
       question: pollData.question,
-      options: pollData.options,
+      options: pollData.options
     });
   };
 
-  // State to track votes in progress to prevent duplicate votes
-  const [votesInProgress, setVotesInProgress] = useState<{
-    [key: string]: boolean;
-  }>({});
-
-  // WebSocket function to vote on a poll with retry logic
+  // WebSocket function to vote on a poll
   const voteOnPollViaSocket = (pollId: string, optionId: string) => {
     if (!socket || !isConnected) {
-      console.error("❌ Socket not connected");
-      alert("Not connected to server. Please try again.");
+      console.error('❌ Socket not connected');
+      alert('Not connected to server. Please try again.');
       return;
     }
 
-    // Check if we're already voting on this poll
-    const voteKey = `${pollId}-${optionId}`;
-    if (votesInProgress[voteKey]) {
-      console.log(
-        "⚠️ Vote already in progress for this option, skipping duplicate"
-      );
-      return;
-    }
+    console.log('🗳️ Voting via socket:', { pollId, optionId });
+    socket.emit('votePoll', {
+      roomId,
+      pollId,
+      optionId,
+      userId
+    });
+  };
 
-    // Mark this vote as in progress
-    setVotesInProgress((prev) => ({ ...prev, [voteKey]: true }));
-
-    console.log("🗳️ Voting via socket:", { pollId, optionId });
-
-    // Add a short delay to ensure poll is fully created on the server
-    setTimeout(() => {
-      socket.emit("votePoll", {
-        roomId,
-        pollId,
-        optionId,
-        userId,
-      });
-
-      // Clear the in-progress flag after a timeout
-      setTimeout(() => {
-        setVotesInProgress((prev) => {
-          const updated = { ...prev };
-          delete updated[voteKey];
-          return updated;
-        });
-      }, 5000); // Allow 5 seconds before enabling re-voting
-    }, 300); // 300ms delay before sending vote
-  }; // Close modal when clicking outside
+  // Close modal when clicking outside
   const handleClickOutside = (e: React.MouseEvent) => {
     if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
       setShowModal(false);
@@ -459,20 +324,20 @@ const PollsList: React.FC<PollsListProps> = ({
     if (socket && isConnected) {
       createPollViaSocket({
         question: pollTitle.trim(),
-        options: filteredOptions,
+        options: filteredOptions
       });
     } else {
       // Fallback to local creation if socket not available
       const tempPoll: Poll = {
         id: `temp-${Date.now()}`,
         question: pollTitle,
-        options: filteredOptions.map((text) => ({
-          text,
-          votes: 0,
-          percentage: 0,
+        options: filteredOptions.map(text => ({ 
+          text, 
+          votes: 0, 
+          percentage: 0 
         })),
         totalVotes: 0,
-        timeLeft: "2:00",
+        timeLeft: "5:00", // Updated to 5 minutes
       };
 
       setLocalPolls((prev) => [tempPoll, ...prev]);
@@ -480,7 +345,7 @@ const PollsList: React.FC<PollsListProps> = ({
       if (onCreatePoll) {
         onCreatePoll({
           question: pollTitle,
-          options: filteredOptions.map((text) => ({ text })),
+          options: filteredOptions.map(text => ({ text })),
         });
       }
     }
@@ -500,17 +365,12 @@ const PollsList: React.FC<PollsListProps> = ({
     setShowModal(true);
   };
 
-  // Add a new state to track which specific option each user voted for
-  const [userVoteChoices, setUserVoteChoices] = useState<{
-    [pollId: string]: number; // stores the option index the user voted for
-  }>({});
-
   // Updated vote handler - using option mapping for server polls
   const handleLocalVote = (pollId: string, optionIndex: number) => {
     // Check if this is a local poll
     if (pollId.startsWith("temp-")) {
       // Handle local poll voting (existing logic)
-      const alreadyVoted = votedPolls.includes(pollId);
+      const alreadyVoted = userVotes[pollId];
 
       setLocalPolls((prevPolls) => {
         const updatedPolls = prevPolls.map((poll) => {
@@ -563,74 +423,45 @@ const PollsList: React.FC<PollsListProps> = ({
         return updatedPolls;
       });
 
-      if (!alreadyVoted) {
-        setVotedPolls((prev) => [...prev, pollId]);
-      }
+      // Update user votes for local polls
+      setUserVotes(prev => ({
+        ...prev,
+        [pollId]: `option-${optionIndex}`
+      }));
     } else {
       // Handle server poll voting via WebSocket using mapping
       const optionMapping = pollOptionMapping[pollId];
-
-      console.log("🗳️ Debug vote attempt:", {
-        pollId,
-        optionIndex,
+      
+      console.log('🗳️ Debug vote attempt:', { 
+        pollId, 
+        optionIndex, 
         hasMapping: !!optionMapping,
         mapping: optionMapping,
-        allMappings: pollOptionMapping,
+        allMappings: pollOptionMapping 
       });
-
+      
       if (optionMapping && optionMapping[optionIndex]) {
         const optionId = optionMapping[optionIndex];
-        console.log("🗳️ Voting on server poll:", {
-          pollId,
-          optionIndex,
-          optionId,
+        console.log('🗳️ Voting on server poll:', { 
+          pollId, 
+          optionIndex, 
+          optionId 
         });
-
-        // Add this poll to voted polls optimistically to provide feedback
-        setVotedPolls((prev) => {
-          if (!prev.includes(pollId)) {
-            return [...prev, pollId];
-          }
-          return prev;
-        });
-
-        // For both local and server polls, track the user's choice optimistically
-        setUserVoteChoices((prev) => ({
-          ...prev,
-          [pollId]: optionIndex,
-        }));
-
-        // Send the vote to the server
+        
         voteOnPollViaSocket(pollId, optionId);
+        console.log('🗳️ WebSocket vote:', { pollId, optionIndex });
       } else {
-        console.warn("⚠️ No option mapping found for poll:", {
-          pollId,
+        console.error('❌ No option mapping found for poll:', { 
+          pollId, 
           optionIndex,
           availableMappings: Object.keys(pollOptionMapping),
-          requestedMapping: optionMapping,
+          requestedMapping: optionMapping
         });
-
-        // Create a fallback option ID
-        const fallbackOptionId = `${pollId}-option-${optionIndex}`;
-        console.log("⚠️ Using fallback option ID:", fallbackOptionId);
-
-        // Update mappings for future use
-        setPollOptionMapping((prev) => ({
-          ...prev,
-          [pollId]: {
-            ...(prev[pollId] || {}),
-            [optionIndex]: fallbackOptionId,
-          },
-        }));
-
-        // Try to vote with the fallback ID
-        voteOnPollViaSocket(pollId, fallbackOptionId);
-
-        // Also request polls again to rebuild mappings
-        setTimeout(() => {
-          console.log("🔄 Requesting fresh polls to rebuild mappings...");
-          requestActivePolls();
-        }, 800);
+        
+        // Fallback: try to request polls again to rebuild mappings
+        console.log('🔄 Requesting fresh polls to rebuild mappings...');
+        requestActivePolls();
+        return;
       }
 
       // Also call the original onVote handler if provided
@@ -643,32 +474,30 @@ const PollsList: React.FC<PollsListProps> = ({
     // Filter out local polls that might have already been added from the server
     // based on question text matching
     const filteredLocalPolls = localPolls.filter(
-      (localPoll) =>
-        !serverPolls.some(
-          (serverPoll) => serverPoll.question === localPoll.question
-        ) && !polls.some((poll) => poll.question === localPoll.question)
+      (localPoll) => !serverPolls.some((serverPoll) => serverPoll.question === localPoll.question) &&
+                    !polls.some((poll) => poll.question === localPoll.question)
     );
 
     // For parent props polls that might be server polls without mappings, try to create mappings
-    polls.forEach((poll) => {
+    polls.forEach(poll => {
       if (!pollOptionMapping[poll.id]) {
-        console.log("📊 Creating fallback mapping for parent poll:", poll.id);
+        console.log('📊 Creating fallback mapping for parent poll:', poll.id);
         // This is a fallback - we'll generate option IDs based on text hash or index
         const optionMapping: { [optionIndex: number]: string } = {};
         poll.options.forEach((opt, index) => {
           // Use a simple hash of the option text as ID (fallback)
           optionMapping[index] = `option-${poll.id}-${index}`;
         });
-        setPollOptionMapping((prev) => ({
+        setPollOptionMapping(prev => ({
           ...prev,
-          [poll.id]: optionMapping,
+          [poll.id]: optionMapping
         }));
       }
     });
 
     // Combine all polls: server polls first, then local polls, then parent polls
     return [...serverPolls, ...filteredLocalPolls, ...polls];
-  }, [serverPolls, localPolls, polls]);
+  }, [serverPolls, localPolls, polls, pollOptionMapping]);
 
   // For debugging
   React.useEffect(() => {
@@ -679,14 +508,12 @@ const PollsList: React.FC<PollsListProps> = ({
     <div className="space-y-4 sm:space-y-6 pb-4 sm:pb-0">
       {/* Connection status indicator */}
       {socket && (
-        <div
-          className={`text-xs px-2 py-1 rounded ${
-            isConnected
-              ? "bg-green-100 text-green-800"
-              : "bg-red-100 text-red-800"
-          }`}
-        >
-          {isConnected ? "🟢 Connected" : "🔴 Disconnected"}
+        <div className={`text-xs px-2 py-1 rounded ${
+          isConnected 
+            ? 'bg-green-100 text-green-800' 
+            : 'bg-red-100 text-red-800'
+        }`}>
+          {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
         </div>
       )}
 
@@ -702,7 +529,7 @@ const PollsList: React.FC<PollsListProps> = ({
           >
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900">
-                Create Live Poll {socket && !isConnected && "(Offline Mode)"}
+                Create Live Poll {socket && !isConnected && '(Offline Mode)'}
               </h3>
               <button
                 onClick={() => setShowModal(false)}
@@ -789,8 +616,8 @@ const PollsList: React.FC<PollsListProps> = ({
                 disabled={socket && !isConnected}
                 className={`px-4 py-2 rounded-md text-white ${
                   socket && !isConnected
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-purple-600 hover:bg-purple-700"
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-purple-600 hover:bg-purple-700'
                 }`}
               >
                 Create Poll
@@ -828,103 +655,98 @@ const PollsList: React.FC<PollsListProps> = ({
             </button>
           </div>
 
-          {/* Info message about changing votes */}
+          {/* Info message about voting */}
           {(localPolls.length > 0 || serverPolls.length > 0) && (
             <div className="mb-3 text-sm text-purple-700 bg-purple-50 p-2 rounded">
               <span>
-                {localPolls.length > 0 &&
-                  `You have ${localPolls.length} new poll(s) waiting to be synchronized`}
-                {localPolls.length > 0 && serverPolls.length > 0 && " • "}
-                {serverPolls.length > 0 &&
-                  `${serverPolls.length} active server poll(s)`}
-                {votedPolls.length > 0 &&
-                  ` • You can change your vote by selecting a different option`}
+                {localPolls.length > 0 && `You have ${localPolls.length} new poll(s) waiting to be synchronized`}
+                {localPolls.length > 0 && serverPolls.length > 0 && ' • '}
+                {serverPolls.length > 0 && `${serverPolls.length} active server poll(s)`}
+                {Object.keys(userVotes).length > 0 && ` • You can change your vote by selecting a different option`}
               </span>
             </div>
           )}
-          {allPolls.map((poll) => (
-            <div
-              key={poll.id}
-              className="bg-gray-50 border p-4 sm:p-6 rounded-lg"
-            >
-              <div className="flex flex-col sm:flex-row sm:justify-between mb-3 sm:mb-4">
-                <h3 className="text-black text-base sm:text-lg font-semibold mb-2 sm:mb-0 pr-0 sm:pr-4">
-                  {poll.question}
-                </h3>
-                <div className="text-xs sm:text-sm text-left sm:text-right flex-shrink-0">
-                  <div className="text-gray-600">{poll.totalVotes} votes</div>
-                  {poll.timeLeft && (
-                    <div className="text-purple-600 font-medium">
-                      {poll.timeLeft}
-                    </div>
-                  )}
+          
+          {allPolls.map((poll) => {
+            const userVotedOptionId = userVotes[poll.id];
+            const hasUserVoted = !!userVotedOptionId;
+            
+            return (
+              <div
+                key={poll.id}
+                className="bg-gray-50 border p-4 sm:p-6 rounded-lg"
+              >
+                <div className="flex flex-col sm:flex-row sm:justify-between mb-3 sm:mb-4">
+                  <h3 className="text-black text-base sm:text-lg font-semibold mb-2 sm:mb-0 pr-0 sm:pr-4">
+                    {poll.question}
+                  </h3>
+                  <div className="text-xs sm:text-sm text-left sm:text-right flex-shrink-0">
+                    <div className="text-gray-600">{poll.totalVotes} votes</div>
+                    {poll.timeLeft && (
+                      <div className="text-purple-600 font-medium">
+                        {poll.timeLeft}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-2 sm:space-y-3">
-                {poll.options.map((opt, index) => {
-                  const hasVoted = votedPolls.includes(poll.id);
-                  const isUserChoice = userVoteChoices[poll.id] === index; // This user's specific choice
-                  const hasAnyVotes = opt.votes > 0; // Whether this option has any votes
+                <div className="space-y-2 sm:space-y-3">
+                  {poll.options.map((opt, index) => {
+                    // For server polls, check if this option's ID matches user's vote
+                    const optionMapping = pollOptionMapping[poll.id];
+                    const optionId = optionMapping ? optionMapping[index] : `option-${index}`;
+                    const isSelected = userVotedOptionId === optionId;
 
-                  return (
-                    <div key={index}>
-                      <button
-                        onClick={() => handleLocalVote(poll.id, index)}
-                        disabled={
-                          votesInProgress[
-                            `${poll.id}-${pollOptionMapping?.[poll.id]?.[index] || `${poll.id}-option-${index}`}`
-                          ]
-                        }
-                        className={`w-full text-left border p-2 sm:p-3 rounded transition-colors ${
-                          isUserChoice
-                            ? "bg-purple-50 border-purple-300" // Only highlight user's choice
-                            : hasVoted
-                              ? "bg-gray-50 hover:bg-gray-100"
-                              : "hover:bg-gray-100"
-                        } ${votesInProgress[`${poll.id}-${pollOptionMapping?.[poll.id]?.[index] || `${poll.id}-option-${index}`}`] ? "opacity-70 cursor-not-allowed" : ""}`}
-                      >
-                        <div className="flex justify-between text-xs sm:text-sm mb-1">
-                          <span
-                            className={`font-medium break-words pr-2 ${
-                              isUserChoice ? "text-purple-800" : "text-gray-800"
-                            }`}
-                          >
-                            {opt.text}
-                            {isUserChoice && (
-                              <span className="ml-2 text-purple-600 text-xs">
-                                (Your Choice)
-                              </span>
-                            )}
-                            {votesInProgress[
-                              `${poll.id}-${pollOptionMapping?.[poll.id]?.[index] || `${poll.id}-option-${index}`}`
-                            ] && (
-                              <span className="ml-2 text-gray-500 text-xs">
-                                (Voting...)
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-purple-600 font-medium flex-shrink-0">
-                            {opt.percentage}%
-                          </span>
-                        </div>
-                        <div className="bg-gray-200 h-1.5 sm:h-2 rounded-full">
-                          <div
-                            className={`h-1.5 sm:h-2 rounded-full transition-all duration-300 ${
-                              isUserChoice ? "bg-purple-600" : "bg-gray-400"
-                            }`}
-                            style={{ width: `${opt.percentage}%` }}
-                          />
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {opt.votes} votes
-                        </div>
-                      </button>
-                    </div>
-                  );
-                })}
+                    return (
+                      <div key={index}>
+                        <button
+                          onClick={() => handleLocalVote(poll.id, index)}
+                          className={`w-full text-left border p-2 sm:p-3 rounded transition-colors ${
+                            isSelected
+                              ? "bg-purple-50 border-purple-300"
+                              : hasUserVoted
+                                ? "bg-gray-50 hover:bg-gray-100"
+                                : "hover:bg-gray-100"
+                          }`}
+                        >
+                          <div className="flex justify-between text-xs sm:text-sm mb-1">
+                            <span
+                              className={`font-medium break-words pr-2 ${
+                                isSelected ? "text-purple-800" : "text-gray-800"
+                              }`}
+                            >
+                              {opt.text}
+                              {isSelected && (
+                                <span className="ml-2 text-purple-600 text-xs">
+                                  (Your Vote)
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-purple-600 font-medium flex-shrink-0">
+                              {opt.percentage}%
+                            </span>
+                          </div>
+                          <div className="bg-gray-200 h-1.5 sm:h-2 rounded-full">
+                            <div
+                              className="bg-purple-600 h-1.5 sm:h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${opt.percentage}%` }}
+                            />
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {opt.votes} votes
+                          </div>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                {hasUserVoted && (
+                  <div className="mt-3 text-xs text-green-600 font-medium">
+                    ✓ You have voted on this poll. Click another option to change your vote.
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
