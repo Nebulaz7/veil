@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { X, Mail, Calendar } from "lucide-react";
-import { fetchProfile } from '../../lib/api';
+import { fetchProfile } from "../../lib/api";
 
 interface AccountModalProps {
   isOpen: boolean;
@@ -16,7 +16,6 @@ interface Profile {
   createdAt: string;
 }
 
-
 const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -24,9 +23,9 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
   const [avatarError, setAvatarError] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
 
-    useEffect(() => {
+  useEffect(() => {
     fetchProfile()
-      .then(data => setProfile(data))
+      .then((data) => setProfile(data))
       .catch(console.error)
       .finally(() => setIsLoading(false));
   }, []);
@@ -164,9 +163,7 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
                 <Mail size={18} className="text-purple-800" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-white">Email</p>
-                  <p className="text-sm text-white truncate">
-                    {profile.email}
-                  </p>
+                  <p className="text-sm text-white truncate">{profile.email}</p>
                 </div>
               </div>
 

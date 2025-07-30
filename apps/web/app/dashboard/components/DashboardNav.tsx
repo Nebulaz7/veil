@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -8,17 +8,35 @@ import Image from "next/image";
 import ProfileIcon from "./svg/ProfileIcon";
 import SettingsIcon from "./svg/SettingsIcon";
 import Signout from "./svg/Signout";
+import { fetchProfile } from "../../lib/api";
 
 // Modals import
 import AccountModal from "./AccountModal";
 import SettingsModal from "./SettingsModal";
 import SignoutModal from "./SignoutModal";
 
+interface Profile {
+  email?: string;
+  name: string;
+  picture: string;
+  createdAt?: string;
+}
+
 const DashboardNav = () => {
   // Modal state
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isSignoutModalOpen, setIsSignoutModalOpen] = useState(false);
+
+  useEffect(() => {
+    fetchProfile()
+      .then((data) => setProfile(data))
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
+  }, []);
 
   return (
     <div>
@@ -32,11 +50,11 @@ const DashboardNav = () => {
           </Link>
         </div>
         <div className="flex gap-2">
-          <input
+          {/* <input
             type="text"
             placeholder="Search"
             className="input border-[2px] border-gray-500 rounded-full input-bordered w-24 md:w-auto"
-          />
+          /> */}
           <div className="dropdown dropdown-end">
             <div
               tabIndex={0}
@@ -44,12 +62,23 @@ const DashboardNav = () => {
               className="btn btn-ghost btn-circle avatar"
             >
               <div className="w-10 rounded-full">
-                <Image
-                  alt="User Avatar"
-                  src="/avatar.svg"
-                  width={40}
-                  height={40}
-                />
+                {avatarError ? (
+                  <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white text-2xl font-semibold">
+                    <Image
+                      alt="User Avatar"
+                      src="/avatar.svg"
+                      width={40}
+                      height={40}
+                    />
+                  </div>
+                ) : (
+                  <img
+                    src={profile?.picture || "/avatar.svg"}
+                    alt={profile?.name || "User Avatar"}
+                    className="w-10 h-10 rounded-full object-cover"
+                    onError={() => setAvatarError(true)}
+                  />
+                )}
               </div>
             </div>
             <ul
